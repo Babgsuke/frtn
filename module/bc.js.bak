@@ -1,0 +1,38 @@
+const user = require("../model/User.js");
+
+function delay(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function safeSend(bot, userId, message) {
+	try {
+        await bot.unpinAllChatMessages(userId);
+		const sentMessage = await bot.sendMessage(userId, message);
+		await bot.pinChatMessage(userId, sentMessage.message_id);
+	} catch (err) {
+		// Jika error rate limit (429)
+		if (err.response && err.response.statusCode === 429) {
+			const retryAfter = err.response.body.parameters?.retry_after || 1;
+			console.log(`Kena rate limit, tunggu ${retryAfter}s`);
+			await delay((retryAfter + 0.5) * 1000);
+			return safeSend(bot, userId, message);
+		} else {
+			console.error("Gagal kirim ke", userId, err.message);
+		}
+	}
+}
+
+async function broadcash(bot, userId, message) {
+	const listUserid = await user.findAll({
+		attributes: ["user_id"],
+		raw: true
+	});
+	const msage = await bot.sendMessage(userId, "proses...");
+	for (const userid of listUserid) {
+		await safeSend(bot, userid.user_id, message);
+		await delay(200);
+	}
+    bot.sendMessage(userId, "berhasil broadcast ke all user");
+}
+
+module.exports = broadcash;
