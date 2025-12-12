@@ -6,6 +6,7 @@ const getDate = require("../module/Date.js");
 const user = require("../model/User.js");
 const baseUrlApi = process.env.baseUrl;
 const port = process.env.port;
+const axios = require("axios");
 const payApi = process.env.payApi;
 const {
 	clearUserStep,
@@ -51,6 +52,7 @@ module.exports = bot => {
 
 		if (query.data == "getSSHPrem") {
 			try {
+				console.log(user);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
 					bot.sendMessage(
@@ -80,25 +82,31 @@ module.exports = bot => {
 					);
 					return;
 				}
-				const loading = await bot.sendMessage(
-					chatId,
-					"⏳ Loading... tunggu sebentar..."
+				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
+				const res = await axios.post(
+					`${baseUrlApi}:${port}/api/ssh/create`
 				);
-				const res = axios.post(`${baseUrl}:${port}/api/ssh/create`);
-				bot.deleteMessage(chatId, loading.message_id);
-				bot.sendMessage(chatId, res.data, { parse_mode: "HTML" });
+				console.log(res);
+				const raw = res.data.data;
+
+				// ubah \\n menjadi newline beneran
+				const message = raw.replace(/\\n/g, "\n");
+
+				bot.sendMessage(chatId, message, {
+					parse_mode: "HTML",
+					disable_web_page_preview: true
+				});
 			} catch (err) {
-				bot.deleteMessage(chatId, loading.message_id);
-				console.log("gagal get ssh premium: ", err.response.message);
+				console.log("gagal get ssh premium: " + err);
 				bot.sendMessage(
 					chatId,
 					"Terjadi kesalahan server.Silahkan hubunggi admin"
 				);
 			}
 		}
-
 		if (query.data == "getV2RAYPrem") {
 			try {
+				console.log(user);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
 					bot.sendMessage(
@@ -128,16 +136,22 @@ module.exports = bot => {
 					);
 					return;
 				}
-				const loading = await bot.sendMessage(
-					chatId,
-					"⏳ Loading... tunggu sebentar..."
+				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
+				const res = await axios.post(
+					`${baseUrlApi}:${port}/api/vmess/create`
 				);
-				const res = axios.post(`${baseUrl}:${port}/api//vmess/create`);
-				bot.deleteMessage(chatId, loading.message_id);
-				bot.sendMessage(chatId, res.data, { parse_mode: "HTML" });
+				console.log(res);
+				const raw = res.data.data;
+
+				// ubah \\n menjadi newline beneran
+				const message = raw.replace(/\\n/g, "\n");
+
+				bot.sendMessage(chatId, message, {
+					parse_mode: "HTML",
+					disable_web_page_preview: true
+				});
 			} catch (err) {
-				bot.deleteMessage(chatId, loading.message_id);
-				console.log("gagal get v2ray premium: ", err.response.message);
+				console.log("gagal get ssh premium: " + err);
 				bot.sendMessage(
 					chatId,
 					"Terjadi kesalahan server.Silahkan hubunggi admin"
@@ -151,20 +165,21 @@ module.exports = bot => {
 					"https://api.adijayavpn.cloud/api/deposit",
 					{
 						params: {
-							amount: 8000,
+							amount: 90,
 							apikey: payApi
 						}
 					}
 				);
+				console.log(res);
 				bot.deleteMessage(chatId, messageId);
 				const sent = await bot.sendPhoto(
 					chatId,
-					datatraa.actions[0].url,
+					res.data.data.qris_url,
 					{
 						caption: `Invoice Pembayaran Berhasil Dibuat
 
-Order Id: ${res.data.transaction_id}
-Jumlah: ${formatRupiahRp(res.data.total_amount)}
+Order Id: ${res.data.data.transaction_id}
+Jumlah: ${formatRupiahRp(res.data.data.total_amount)}
 
 Silakan scan QRIS di atas untuk menyelesaikan pembayaran, expired dalam 8 menit..`
 					}
@@ -177,12 +192,15 @@ Silakan scan QRIS di atas untuk menyelesaikan pembayaran, expired dalam 8 menit.
 							"https://api.adijayavpn.cloud/api/status/payment",
 							{
 								params: {
-									transaction_id: res.data.transaction_id,
+									transaction_id:
+										res.data.data.transaction_id,
 									apikey: payApi
 								}
 							}
 						);
-						if (result.paid) {
+						console.log(result);
+
+						if (result.data.paid) {
 							await user.update(
 								{
 									premium: true,
