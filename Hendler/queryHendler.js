@@ -52,10 +52,10 @@ module.exports = bot => {
 
 		if (query.data == "getSSHPrem") {
 			try {
-				console.log(user);
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
-					bot.sendMessage(
+					const sent = await bot.sendMessage(
 						chatId,
 						`Fitur ini hanya untuk pengguna *Premium*.
 
@@ -80,6 +80,7 @@ module.exports = bot => {
 							}
 						}
 					);
+					setlastMesage_id(userId, sent.message_id);
 					return;
 				}
 				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
@@ -106,10 +107,11 @@ module.exports = bot => {
 		}
 		if (query.data == "getV2RAYPrem") {
 			try {
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
 				console.log(user);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
-					bot.sendMessage(
+					const sent = await bot.sendMessage(
 						chatId,
 						`Fitur ini hanya untuk pengguna *Premium*.
 
@@ -134,6 +136,7 @@ module.exports = bot => {
 							}
 						}
 					);
+					setlastMesage_id(userId, sent.message_id);
 					return;
 				}
 				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
@@ -161,6 +164,7 @@ module.exports = bot => {
 
 		if (query.data == "buyPrem30") {
 			try {
+			    await bot.deleteMessage(chatId, lastMesageid[userId]);
 				const res = await axios.get(
 					"https://api.adijayavpn.cloud/api/deposit",
 					{
