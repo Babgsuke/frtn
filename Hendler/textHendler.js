@@ -8,6 +8,7 @@ const {
 	setlastMesage_id
 } = require("../module/Session.js");
 const akun = require("../model/Account.js");
+const User = require("../model/User.js");
 const CHANNEL_ID = -1003157492398;
 async function checkJoin(bot, userId) {
 	try {
@@ -31,6 +32,10 @@ module.exports = bot => {
 		const lastMesage_id = getlastMesage_id();
 		const name = msg.from.first_name || "undefined";
 		const joined = await checkJoin(bot, userId);
+		const username = msg.from.username
+			? `@${msg.from.username}`
+			: "Anda belum membuat username";
+		await createUser(userId, username);
 		if (!joined) {
 			return bot.sendMessage(
 				userId,
@@ -50,15 +55,21 @@ module.exports = bot => {
 				}
 			);
 		}
-		const username = msg.from.username
-			? `@${msg.from.username}`
-			: "Anda belum membuat username";
 		try {
 			if (lastMesage_id[userId]) {
 				bot.deleteMessage(chatId, lastMesage_id[userId]);
 			}
 		} catch (err) {
 			return;
+		}
+		let status = "";
+		const users = await User.findOne({
+			where: { user_id: userId }
+		});
+		if (!users.premium) {
+			status = "Free";
+		} else {
+			status = "Premium";
 		}
 		await createUser(userId, username);
 		clearUserStep(userId);
@@ -73,6 +84,7 @@ module.exports = bot => {
 <b>Info User:</b>
 🆔 ID: <code>${userId}</code>
 👤 Name: ${name}
+📊 Status: ${status}
 📛 Username: ${username}
 
 <b>Please select the menu:</b>`,
@@ -85,8 +97,8 @@ module.exports = bot => {
 								callback_data: "getSSHPrem"
 							},
 							{
-								text: "GET V2RAY PREMIUM",
-								callback_data: "getV2RAYPrem"
+								text: "Buy Premium",
+								callback_data: "buyPrem"
 							}
 						],
 						[

@@ -9,7 +9,8 @@ const User = db.define("User", {
 	},
 	username: {
 		type: DataTypes.STRING,
-		allowNull: false
+		allowNull: false,
+		defaultValue: "uknow"
 	},
 	premium: {
 		type: DataTypes.BOOLEAN,

@@ -52,7 +52,7 @@ module.exports = bot => {
 
 		if (query.data == "getSSHPrem") {
 			try {
-			await bot.deleteMessage(chatId, lastMesageid[userId]);
+				await bot.deleteMessage(chatId, lastMesageid[userId]);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
 					const sent = await bot.sendMessage(
@@ -60,9 +60,9 @@ module.exports = bot => {
 						`Fitur ini hanya untuk pengguna *Premium*.
 
 *Dengan Premium kamu bisa:*
-• unlimited create ssh/v2ray premium
+• unlimited create ssh premium
 • server stabil
-• masa aktif ssh/v2ray 7 hari
+• masa aktif ssh 7 hari
 • limit ip: 2ip
 
 *Ketik tombol di bawah untuk upgrade* ✨`,
@@ -107,7 +107,7 @@ module.exports = bot => {
 		}
 		if (query.data == "getV2RAYPrem") {
 			try {
-			await bot.deleteMessage(chatId, lastMesageid[userId]);
+				await bot.deleteMessage(chatId, lastMesageid[userId]);
 				console.log(user);
 				const users = await user.findOne({ where: userId });
 				if (!users.premium) {
@@ -162,14 +162,57 @@ module.exports = bot => {
 			}
 		}
 
+		if (query.data == "buyPrem") {
+			try {
+			  await bot.deleteMessage(chatId, lastMesageid[userId]);
+			  const users = await user.findOne({ where: userId });
+				if (!users.premium) {
+					const sent = await bot.sendMessage(
+						chatId,
+						`Fitur ini hanya untuk pengguna *Premium*.
+
+*Dengan Premium kamu bisa:*
+• unlimited create ssh premium
+• server stabil
+• masa aktif ssh 7 hari
+• limit ip: 2ip
+
+*Ketik tombol di bawah untuk upgrade* ✨`,
+						{
+							parse_mode: "Markdown",
+							reply_markup: {
+								inline_keyboard: [
+									[
+										{
+											text: "BUY PREMIUM 30 DAY",
+											callback_data: "buyPrem30"
+										}
+									]
+								]
+							}
+						}
+					);
+					setlastMesage_id(userId, sent.message_id);
+					return;
+				}
+				const sent = await bot.sendMessage(
+					chatId,
+					"Anda sudah menjadi premium"
+				);
+				setlastMesage_id(userId, sent.message_id);
+			} catch (err) {
+				console.error("Error:", err);
+				bot.sendMessage(chatId, "Terjadi kesalahan server.");
+			}
+		}
 		if (query.data == "buyPrem30") {
 			try {
-			    await bot.deleteMessage(chatId, lastMesageid[userId]);
+				await bot.deleteMessage(chatId, lastMesageid[userId]);
 				const res = await axios.get(
 					"https://api.adijayavpn.cloud/api/deposit",
 					{
 						params: {
-							amount: 90,
+							amount: 8000,
 							apikey: payApi
 						}
 					}
