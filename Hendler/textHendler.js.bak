@@ -71,6 +71,7 @@ module.exports = bot => {
 		} else {
 			status = "Premium";
 		}
+		await createUser(userId, username);
 		clearUserStep(userId);
 		const quote = await axios.get(
 			"https://quotes.liupurnomo.com/api/quotes/random"
@@ -96,8 +97,8 @@ module.exports = bot => {
 								callback_data: "getSSHPrem"
 							},
 							{
-								text: "GET V2RAY PREMIUM",
-								callback_data: "getV2RAYPrem"
+								text: "Buy Premium",
+								callback_data: "buyPrem"
 							}
 						],
 						[
@@ -105,10 +106,6 @@ module.exports = bot => {
 							{ text: "GET V2RAY", callback_data: "getV2RAY" }
 						],
 						[
-							{
-								text: "Upgrade Premium",
-								callback_data: "buyPrem"
-							},
 							{
 								text: "Donate",
 								url: "https://saweria.co/GalangStoree"
