@@ -16,6 +16,8 @@ module.exports = bot => {
 		const input = msg.text?.trim();
 		const lastMesageid = getlastMesage_id();
 		
+		broadcash.handleMessage(bot, msg);
+
 		if (!UserStep[userId] || input.startsWith("/")) return;
 		if (UserStep[userId].step == "inputBc") {
 			const message = msg.text?.trim();

@@ -33,11 +33,7 @@ module.exports = bot => {
 			console.log(promt);
 			switch (promt) {
 				case "bc":
-					bot.editMessageText("Masukan text broadcash", {
-						chat_id: chatId,
-						message_id: lastMesageid[userId]
-					});
-					setUserStep(userId, { step: "inputBc" });
+					broadcash.start(bot, userId)
 					break;
 				case "uploadAcount":
 					bot.editMessageText("Masukan detail akun", {
