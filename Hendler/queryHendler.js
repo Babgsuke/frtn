@@ -5,6 +5,7 @@ const createAcount = require("../module/UploadAcount.js");
 const getDate = require("../module/Date.js");
 const user = require("../model/User.js");
 const baseUrlApi = process.env.baseUrl;
+const baseUrlFree = process.env.baseUrlfree;
 const port = process.env.port;
 const axios = require("axios");
 const payApi = process.env.payApi;
@@ -13,8 +14,11 @@ const {
 	setUserStep,
 	getUserStep,
 	getlastMesage_id,
-	setlastMesage_id
+	setlastMesage_id,
+ setJeda,
+	getJeda
 } = require("../module/Session.js");
+const API_COOLDOWN = 24 * 60 * 60 * 1000; // 24 jam
 function formatRupiahRp(angka) {
 	return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
@@ -23,6 +27,7 @@ module.exports = bot => {
 		const lastMesageid = getlastMesage_id();
 		const userstep = getUserStep();
 		const username = query.from.username;
+		const apiLimit = getJeda()
 		const chatId = query.message.chat.id;
 		const userId = query.from.id;
 		const messageId = query.message.message_id;
@@ -45,7 +50,104 @@ module.exports = bot => {
 				default:
 			}
 		}
+		
+		if (query.data === "inviteFriend") {
+		  try {
+		  const dataUser = await user.findByPk(userId);
+		  const total = dataUser.referral_count || 0;
+          const rewarded = dataUser.referral_rewarded || 0;
 
+          const nextTarget = Math.floor(total / 5) * 5 + 5;
+          const remaining = nextTarget - total;
+		  await bot.deleteMessage(chatId, messageId)
+		  const sent = await bot.sendMessage(
+      query.message.chat.id,
+      `👥 <b>Undang teman & dapatkan premium!</b>
+
+<b>🔗 Link referral kamu:</b>
+<code>https://t.me/GalangStartbot?start=${userId}</code>
+      
+📊 <b>Statistik Referral Kamu</b>
+
+👥 Total referral: <b>${total}</b>
+🎁 Referral terhitung: <b>${rewarded}</b>
+
+🏆 Reward:
+• 5 referral = Premium +30 hari
+• Berlaku kelipatan ♻️
+
+🎯 Target berikutnya:
+${remaining > 0
+      ? `Butuh <b>${remaining}</b> referral lagi`
+      : `🎉 Target tercapai!`
+    }`,
+      { parse_mode: "HTML", reply_markup: {
+								inline_keyboard: [
+									[
+										{
+											text: "🏆 Leaderboard",
+											callback_data: "refLeaderboard"
+										},
+										{
+	  text: "💳 Kirim undangan",
+											url: `http://t.me/share/url?url=https://t.me/GalangStartbot?start=${userId}&text=Bot%20free%20ssh%20and%20V2ray%20gratis%21%0A`                           }
+									]
+								]
+							} }
+    );
+    setlastMesage_id(userId, sent.message_id);
+		  } catch (e) {
+		    console.log(e)
+		    bot.sendMessage(
+					chatId,
+					"Terjadi kesalahan server.Silahkan hubunggi admin"
+				);
+		  }
+  }
+  
+  if (query.data == "refLeaderboard") {
+    try {
+    await bot.deleteMessage(chatId, lastMesageid[userId])
+  const leaderboard = await user.findAll({
+    where: {
+      referral_count: {
+        [require("sequelize").Op.gt]: 0
+      }
+    },
+    order: [["referral_count", "DESC"]],
+    limit: 10
+  });
+
+  if (leaderboard.length === 0) {
+    return bot.sendMessage(
+      chatId,
+      "🏆 <b>Leaderboard Referral</b>\n\nBelum ada referral.",
+      { parse_mode: "HTML" }
+    );
+  }
+
+  let text = "🏆 <b>Leaderboard Referral</b>\n\n";
+
+  leaderboard.forEach((u, i) => {
+    const medal =
+      i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
+
+    text += `${medal} <b>${u.user_id}</b>\n`;
+    text += `   👥 ${u.referral_count} referral\n\n`;
+  });
+
+  text += "🔥 Ajak teman dan masuk leaderboard!";
+
+  const sent = await bot.sendMessage(chatId, `<blockquote>${text}</blockquote>`, {
+    parse_mode: "HTML"
+  });
+  setlastMesage_id(userId, sent.message_id);
+  bot.answerCallbackQuery(chatId);
+    } catch (e) {
+    console.log(e)
+    }
+
+	}
 		if (query.data == "getSSHPrem") {
 			try {
 				await bot.deleteMessage(chatId, lastMesageid[userId]);
@@ -200,7 +302,9 @@ module.exports = bot => {
 		}
 		if (query.data == "buyPrem30") {
 			try {
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
+			    const users = await user.findOne({ where: userId });
+				if (!users.premium) {
+				await bot.deleteMessage(chatId, messageId);
 				const res = await axios.get(
 					"https://api.adijayavpn.cloud/api/deposit",
 					{
@@ -210,7 +314,6 @@ module.exports = bot => {
 						}
 					}
 				);
-				console.log(res);
 				bot.deleteMessage(chatId, messageId);
 				const sent = await bot.sendPhoto(
 					chatId,
@@ -277,6 +380,13 @@ Status kamu menjadi *Premium* 🎉
 					userId,
 					"Timeout: Pembayaran tidak diterima dalam 8 menit"
 				);
+				return;
+			    }
+			    const sent = await bot.sendMessage(
+					chatId,
+					"Anda sudah menjadi premium"
+				);
+				setlastMesage_id(userId, sent.message_id);
 			} catch (err) {
 				console.error("Error:", err);
 				bot.sendMessage(
@@ -287,35 +397,171 @@ Status kamu menjadi *Premium* 🎉
 		}
 
 		if (query.data == "getSSH") {
-			try {
-				const Akun = await getAkunRandom("ssh");
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
-				bot.sendMessage(chatId, Akun.detail, {
-					parse_mode: "HTML"
-				});
-				bot.sendMessage(
-					process.env.OWNER,
-					`@${username} ${userId} telah get ssh`
-				);
-			} catch (err) {
-				bot.sendMessage(chatId, "Gagal Mendapatkan Akun");
-				console.log(err);
-			}
-		} else if (query.data == "getV2RAY") {
-			try {
-				const Akun = await getAkunRandom("v2ray");
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
-				bot.sendMessage(chatId, Akun.detail, {
-					parse_mode: "HTML"
-				});
-				bot.sendMessage(
-					process.env.OWNER,
-					`@${username} ${userId} telah get v2ray`
-				);
-			} catch (err) {
-				bot.sendMessage(chatId, "Gagal Mendapatkan Akun");
-			}
-		} else if (query.data == "ssh") {
+  // hapus pesan lama
+  try {
+    if (lastMesageid[userId]) {
+      await bot.deleteMessage(chatId, lastMesageid[userId]);
+    }
+  } catch {}
+
+  const now = Date.now();
+  if (!apiLimit[userId]) {
+  apiLimit[userId] = {};
+  }
+  const last = apiLimit[userId].ssh || 0;
+  const canUseAPI = (now - last) >= API_COOLDOWN;
+  console.log(last)
+
+  // ======================
+  // 1️⃣ JIKA KENA LIMIT → STOP (API MASIH HIDUP)
+  // ======================
+  if (!canUseAPI) {
+    const sisa = API_COOLDOWN - (now - last);
+    const jam = Math.ceil(sisa / (1000 * 60 * 60));
+
+    await bot.sendMessage(
+      chatId,
+      `⏳ Anda telah mencapai limit hari ini.\nSilakan tunggu ± ${jam} jam`
+    );
+    return; // ⛔ STOP DI SINI
+  }
+
+  // ======================
+  // 2️⃣ COBA API
+  // ======================
+  try {
+    const res = await axios.post(
+      `${baseUrlFree}:${port}/api/ssh/create`,
+      {},
+      { timeout: 10000 }
+    );
+
+    const raw = res?.data?.data;
+    if (!raw) throw new Error("API kosong");
+
+    const message = raw.replace(/\\n/g, "\n");
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    });
+
+    // simpan limit HANYA jika API sukses
+    setJeda(userId, "ssh", now)
+
+    await bot.sendMessage(
+      process.env.OWNER,
+      `@${username} ${userId} get SSH (API)`
+    );
+
+    return; // ✅ API sukses → STOP
+  } catch (err) {
+    console.log("API mati / error, fallback ke lokal" + err);
+  }
+
+  // ======================
+  // 3️⃣ FALLBACK LOCAL (HANYA JIKA API MATI)
+  // ======================
+  try {
+    const Akun = await getAkunRandom("ssh");
+    if (!Akun || !Akun.detail) throw new Error("Akun kosong");
+
+    await bot.sendMessage(chatId, Akun.detail, {
+      parse_mode: "HTML"
+    });
+
+    await bot.sendMessage(
+      process.env.OWNER,
+      `@${username} ${userId} get SSH (LOCAL)`
+    );
+  } catch (err) {
+    await bot.sendMessage(chatId, "❌ Gagal mendapatkan akun SSH");
+    console.log(err);
+  }
+} else if (query.data == "getV2RAY") {
+  // hapus pesan lama
+  try {
+    if (lastMesageid[userId]) {
+      await bot.deleteMessage(chatId, lastMesageid[userId]);
+    }
+  } catch {}
+
+  const now = Date.now();
+  if (!apiLimit[userId]) {
+  apiLimit[userId] = {};
+  }
+
+  const last = apiLimit[userId].v2ray || 0;
+  const canUseAPI = (now - last) >= API_COOLDOWN;
+  console.log(last)
+
+  // ======================
+  // 1️⃣ JIKA KENA LIMIT → STOP (API MASIH HIDUP)
+  // ======================
+  if (!canUseAPI) {
+    const sisa = API_COOLDOWN - (now - last);
+    const jam = Math.ceil(sisa / (1000 * 60 * 60));
+
+    await bot.sendMessage(
+      chatId,
+      `⏳ Anda telah mencapai limit hari ini.\nSilakan tunggu ± ${jam} jam`
+    );
+    return; // ⛔ STOP DI SINI
+  }
+
+  // ======================
+  // 2️⃣ COBA API
+  // ======================
+  try {
+    const res = await axios.post(
+      `${baseUrlFree}:${port}/api/vmess/create`,
+      {},
+      { timeout: 10000 }
+    );
+
+    const raw = res?.data?.data;
+    if (!raw) throw new Error("API kosong");
+
+    const message = raw.replace(/\\n/g, "\n");
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: "HTML",
+      disable_web_page_preview: true
+    });
+
+    // simpan limit HANYA jika API sukses
+    setJeda(userId, "v2ray", now)
+
+    await bot.sendMessage(
+      process.env.OWNER,
+      `@${username} ${userId} get v2ray (API)`
+    );
+
+    return; // ✅ API sukses → STOP
+  } catch (err) {
+    console.log("API mati / error, fallback ke lokal" + err);
+  }
+
+  // ======================
+  // 3️⃣ FALLBACK LOCAL (HANYA JIKA API MATI)
+  // ======================
+  try {
+    const Akun = await getAkunRandom("ssh");
+    if (!Akun || !Akun.detail) throw new Error("Akun kosong");
+
+    await bot.sendMessage(chatId, Akun.detail, {
+      parse_mode: "HTML"
+    });
+
+    await bot.sendMessage(
+      process.env.OWNER,
+      `@${username} ${userId} get SSH (LOCAL)`
+    );
+  } catch (err) {
+    await bot.sendMessage(chatId, "❌ Gagal mendapatkan akun SSH");
+    console.log(err);
+  }
+} else if (query.data == "ssh") {
 			const exp = await getDate(userstep[userId].data.exp);
 			try {
 				await createAcount(userstep[userId].data.data, "ssh", exp);

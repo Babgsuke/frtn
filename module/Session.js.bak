@@ -7,7 +7,7 @@ let data = {
 	userStep: {},
 	userData: {},
 	lastMesage_id: {},
-	cooldown: {}
+	culdown()
 };
 
 // 🔹 Fungsi untuk memuat data dari file
@@ -41,17 +41,13 @@ function setUserStep(userId, step) {
 	saveStorage();
 }
 
+function setJeda(userId, jeda) {
+	data.userStep[userId] = step;
+	saveStorage();
+}
+
 function getUserStep() {
 	return data.userStep || null;
-}
-
-function getJeda() {
-	return data.cooldown || null;
-}
-
-function setJeda(userId, type, jeda) {
-	data.cooldown[userId][type] = jeda;
-	saveStorage();
 }
 
 function clearUserStep(userId) {
@@ -80,7 +76,5 @@ module.exports = {
 	clearUserStep,
 	getlastMesage_id,
 	setlastMesage_id,
-	clearlastMesage_id,
-	setJeda,
-	getJeda
+	clearlastMesage_id
 };
