@@ -159,16 +159,10 @@ module.exports = bot => {
       reply_markup: {
         inline_keyboard: [
           [
-            { text: "GET SSH PREMIUM", callback_data: "getSSHPrem" },
-            { text: "GET V2RAY PREMIUM", callback_data: "getV2RAYPrem" }
+            { text: "🔰 Buy VPN", callback_data: "buy_vpn" }
           ],
           [
-            { text: "GET SSH", callback_data: "getSSH" },
-            { text: "GET V2RAY", callback_data: "getV2RAY" }
-          ],
-          [
-            { text: "Upgrade Premium", callback_data: "buyPrem" },
-              { text: "👥 Undang Teman", callback_data: "inviteFriend" }
+            { text: "👥 Undang Teman", callback_data: "inviteFriend" }
           ]
         ]
       }
@@ -205,6 +199,22 @@ module.exports = bot => {
 						{
 							text: "Broadcash",
 							callback_data: "owner_bc"
+						}
+					],
+					[
+						{
+							text: "Manage Server",
+							callback_data: "owner_manageServer"
+						},
+						{
+							text: "Manage Prices",
+							callback_data: "owner_managePrices"
+						}
+					],
+					[
+						{
+							text: "🛠 Server Tools",
+							callback_data: "owner_serverTools"
 						}
 					]
 				]

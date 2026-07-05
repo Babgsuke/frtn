@@ -9,10 +9,28 @@ const deleteExpiredData = require("./module/deleteAccountExp.js");
 const path = require("path");
 const dbPath = path.join(__dirname, "db.sqlite");const db = require("./config/db");
 require("./model/User"); // penting agar model terload
+require("./model/Server");
+const Price = require("./model/Price");
 const checkPremium = require("./module/deletePrrmiumExp.js");
 
+async function seedDefaultPrices() {
+  const count = await Price.count();
+  if (count === 0) {
+    await Price.bulkCreate([
+      { days: 1, price: 5000, label: "1 Hari" },
+      { days: 7, price: 15000, label: "7 Hari" },
+      { days: 30, price: 50000, label: "30 Hari" },
+      { days: 90, price: 120000, label: "90 Hari" }
+    ]);
+    console.log("Default prices seeded!");
+  }
+}
+
 db.sync({ alter: true })
-  .then(() => console.log("Database synced!"))
+  .then(async () => {
+    console.log("Database synced!");
+    await seedDefaultPrices();
+  })
   .catch(err => console.log("Sync error:", err));
 
 

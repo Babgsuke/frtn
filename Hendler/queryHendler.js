@@ -1,12 +1,11 @@
-const getAkunRandom = require("../module/getAkun.js");
-const isowner = require("../module/validasi.js");
+const TEST_MODE = process.env.TEST_MODE === "true";
+
 const broadcash = require("../module/bc.js");
 const createAcount = require("../module/UploadAcount.js");
 const getDate = require("../module/Date.js");
 const user = require("../model/User.js");
-const baseUrlApi = process.env.baseUrl;
-const baseUrlFree = process.env.baseUrlfree;
-const port = process.env.port;
+const Server = require("../model/Server.js");
+const Price = require("../model/Price.js");
 const axios = require("axios");
 const payApi = process.env.payApi;
 const {
@@ -14,20 +13,217 @@ const {
 	setUserStep,
 	getUserStep,
 	getlastMesage_id,
-	setlastMesage_id,
- setJeda,
-	getJeda
+	setlastMesage_id
 } = require("../module/Session.js");
-const API_COOLDOWN = 24 * 60 * 60 * 1000; // 24 jam
 function formatRupiahRp(angka) {
 	return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
+const PROTOCOL_LIST = [
+	{ key: "ssh", label: "SSH" },
+	{ key: "vmess", label: "VMess" },
+	{ key: "vless", label: "VLess" },
+	{ key: "trojan", label: "Trojan" },
+	{ key: "shadowsocks", label: "Shadowsocks" }
+];
+
+function formatRupiah(angka) {
+	return "Rp " + angka.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function randomStr(length) {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+	let result = "";
+	for (let i = 0; i < length; i++) result += chars[Math.floor(Math.random() * chars.length)];
+	return result;
+}
+
+function formatJson(text) {
+	try {
+		return "<pre>" + JSON.stringify(JSON.parse(text), null, 2) + "</pre>";
+	} catch {
+		return "<pre>" + text + "</pre>";
+	}
+}
+
+async function callServerApi(serverId, method, path, data = null) {
+	const ServerModel = require("../model/Server.js");
+	const sv = await ServerModel.findByPk(serverId);
+	if (!sv) throw new Error("Server tidak ditemukan");
+	const url = `http://${sv.host}:${sv.port}${path}`;
+	const config = { method, url, timeout: 20000 };
+	if (data) config.data = data;
+	const res = await axios(config);
+	return res.data;
+}
+
+const TOOL_CATEGORIES = {
+	info: { label: "📊 Server Info", icon: "📊" },
+	ssh: { label: "👥 SSH Management", icon: "👥" },
+	xray: { label: "📡 Xray Management", icon: "📡" },
+	sys: { label: "🔧 System Tools", icon: "🔧" },
+	mon: { label: "📈 Monitoring", icon: "📈" }
+};
+
+async function showToolServerMenu(bot, chatId, userId, lastMesageid) {
+	const servers = await Server.findAll();
+	let keyboard = [];
+	if (servers.length === 0) {
+		keyboard.push([{ text: "Belum ada server", callback_data: "noop" }]);
+	} else {
+		for (const sv of servers) {
+			keyboard.push([{ text: "🖥 " + sv.name, callback_data: "svTool_" + sv.id }]);
+		}
+	}
+	await bot.editMessageText("🛠 <b>Pilih Server untuk Tools:</b>", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		parse_mode: "HTML",
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
+async function showToolCategories(bot, chatId, userId, lastMesageid, serverId) {
+	const server = await Server.findByPk(serverId);
+	if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+	let keyboard = [
+		[{ text: "📊 Info & Status", callback_data: "toolCat_" + serverId + "_info" }],
+		[{ text: "👥 SSH Management", callback_data: "toolCat_" + serverId + "_ssh" }],
+		[{ text: "📡 Xray Management", callback_data: "toolCat_" + serverId + "_xray" }],
+		[{ text: "🔧 System Tools", callback_data: "toolCat_" + serverId + "_sys" }],
+		[{ text: "📈 Monitoring", callback_data: "toolCat_" + serverId + "_mon" }]
+	];
+	await bot.editMessageText("🛠 <b>" + server.name + "</b>\n\nPilih kategori tools:", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		parse_mode: "HTML",
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
+async function showToolActions(bot, chatId, userId, lastMesageid, serverId, category) {
+	const server = await Server.findByPk(serverId);
+	if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+	let keyboard = [];
+
+	if (category === "info") {
+		keyboard = [
+			[{ text: "📋 Info Server", callback_data: "tool_" + serverId + "_serverInfo" }],
+			[{ text: "📋 Status Service", callback_data: "tool_" + serverId + "_serverStatus" }],
+			[{ text: "⚡ Speedtest", callback_data: "tool_" + serverId + "_speedtest" }],
+			[{ text: "🌐 Change Domain", callback_data: "toolInput_" + serverId + "_domain" }],
+			[{ text: "🔁 Reboot Server", callback_data: "toolConfirm_" + serverId + "_reboot" }],
+			[{ text: "🔄 Restart Services", callback_data: "toolConfirm_" + serverId + "_restart" }]
+		];
+	} else if (category === "ssh") {
+		keyboard = [
+			[{ text: "📋 List Users", callback_data: "tool_" + serverId + "_listSsh" }],
+			[{ text: "👤 Active Sessions", callback_data: "tool_" + serverId + "_sshActive" }],
+			[{ text: "🔒 Lock User", callback_data: "toolInput_" + serverId + "_lock_ssh" }],
+			[{ text: "🔓 Unlock User", callback_data: "toolInput_" + serverId + "_unlock_ssh" }],
+			[{ text: "📅 Renew User", callback_data: "toolInput_" + serverId + "_renew_ssh" }],
+			[{ text: "❌ Delete User", callback_data: "toolInput_" + serverId + "_delete_ssh" }]
+		];
+	} else if (category === "xray") {
+			const xrayProtos = PROTOCOL_LIST.filter(p => p.key !== "ssh");
+			for (let i = 0; i < xrayProtos.length; i += 2) {
+				const row = [{ text: xrayProtos[i].label, callback_data: "toolXray_" + serverId + "_" + xrayProtos[i].key }];
+				if (xrayProtos[i + 1]) {
+					row.push({ text: xrayProtos[i + 1].label, callback_data: "toolXray_" + serverId + "_" + xrayProtos[i + 1].key });
+				}
+				keyboard.push(row);
+			}
+	} else if (category === "sys") {
+		keyboard = [
+			[{ text: "🧹 Clean Expired", callback_data: "toolConfirm_" + serverId + "_cleanExpired" }],
+			[{ text: "🗑 Clear Cache", callback_data: "toolConfirm_" + serverId + "_clearCache" }],
+			[{ text: "💾 Backup", callback_data: "toolConfirm_" + serverId + "_backup" }],
+			[{ text: "⏰ Set Auto Reboot", callback_data: "toolInput_" + serverId + "_autoReboot" }]
+		];
+	} else if (category === "mon") {
+		keyboard = [
+			[{ text: "📊 IP Limits", callback_data: "tool_" + serverId + "_monitorIps" }],
+			[{ text: "📊 Quota Usage", callback_data: "tool_" + serverId + "_monitorQuota" }]
+		];
+	}
+
+	keyboard.push([{ text: "⬅ Kembali", callback_data: "svTool_" + serverId }]);
+	const catLabel = TOOL_CATEGORIES[category]?.label || category;
+	await bot.editMessageText("🛠 <b>" + server.name + " → " + catLabel + "</b>", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		parse_mode: "HTML",
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
+async function showToolXrayActions(bot, chatId, userId, lastMesageid, serverId, protocol) {
+	const server = await Server.findByPk(serverId);
+	if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+	const protoLabel = PROTOCOL_LIST.find(p => p.key === protocol)?.label || protocol.toUpperCase();
+	const keyboard = [
+		[{ text: "📋 List Users", callback_data: "tool_" + serverId + "_listXray_" + protocol }],
+		[{ text: "📅 Renew User", callback_data: "toolInput_" + serverId + "_renew_" + protocol }],
+		[{ text: "📦 Set Quota", callback_data: "toolInput_" + serverId + "_quota_" + protocol }],
+		[{ text: "🔢 Set IP Limit", callback_data: "toolInput_" + serverId + "_iplimit_" + protocol }],
+		[{ text: "❌ Delete User", callback_data: "toolInput_" + serverId + "_delete_" + protocol }],
+		[{ text: "⬅ Kembali", callback_data: "toolCat_" + serverId + "_xray" }]
+	];
+	await bot.editMessageText("🛠 <b>" + server.name + " → Xray → " + protoLabel + "</b>", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		parse_mode: "HTML",
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
+async function showServerMenu(bot, chatId, userId, lastMesageid) {
+	const servers = await Server.findAll();
+	let keyboard = [];
+	if (servers.length === 0) {
+		keyboard.push([{ text: "Belum ada server", callback_data: "noop" }]);
+	} else {
+		for (const sv of servers) {
+			keyboard.push([
+				{ text: `${sv.name} (${sv.host})`, callback_data: "noop" },
+				{ text: "Hapus", callback_data: "delServer_" + sv.id }
+			]);
+		}
+	}
+	keyboard.push([{ text: "➕ Tambah Server", callback_data: "owner_addServer" }]);
+	await bot.editMessageText("📡 Manage Server:", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
+async function showPriceMenu(bot, chatId, userId, lastMesageid) {
+	const prices = await Price.findAll({ order: [["days", "ASC"]] });
+	let keyboard = [];
+	if (prices.length === 0) {
+		keyboard.push([{ text: "Belum ada harga", callback_data: "noop" }]);
+	} else {
+		for (const p of prices) {
+			keyboard.push([
+				{ text: `${p.label} - ${formatRupiah(p.price)}`, callback_data: "noop" },
+				{ text: "Edit", callback_data: "editPrice_" + p.id },
+				{ text: "Hapus", callback_data: "delPrice_" + p.id }
+			]);
+		}
+	}
+	keyboard.push([{ text: "➕ Tambah Harga", callback_data: "owner_addPrice" }]);
+	await bot.editMessageText("💰 Manage Prices:", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
 module.exports = bot => {
 	bot.on("callback_query", async query => {
 		const lastMesageid = getlastMesage_id();
 		const userstep = getUserStep();
 		const username = query.from.username;
-		const apiLimit = getJeda()
 		const chatId = query.message.chat.id;
 		const userId = query.from.id;
 		const messageId = query.message.message_id;
@@ -47,8 +243,62 @@ module.exports = bot => {
 					});
 					setUserStep(userId, { step: "inptAcount" });
 					break;
+				case "manageServer":
+					showServerMenu(bot, chatId, userId, lastMesageid);
+					break;
+				case "addServer":
+					bot.editMessageText("Masukan detail server:\n\nFormat: nama_server, host, port\n\nContoh: Server SGDO, 103.xx.xx.xx, 3000", {
+						chat_id: chatId,
+						message_id: lastMesageid[userId]
+					});
+					setUserStep(userId, { step: "inputServer" });
+					break;
+				case "managePrices":
+					showPriceMenu(bot, chatId, userId, lastMesageid);
+					break;
+				case "addPrice":
+					bot.editMessageText("Masukan detail harga:\n\nFormat: days, price, label\n\nContoh: 30, 50000, 30 Hari", {
+						chat_id: chatId,
+						message_id: lastMesageid[userId]
+					});
+					setUserStep(userId, { step: "inputPrice" });
+					break;
+				case "serverTools":
+					showToolServerMenu(bot, chatId, userId, lastMesageid);
+					break;
 				default:
 			}
+		}
+		
+		if (query.data.startsWith("delServer_")) {
+			const serverId = query.data.replace("delServer_", "");
+			try {
+				await Server.destroy({ where: { id: serverId } });
+				bot.answerCallbackQuery(query.id, { text: "Server berhasil dihapus" });
+				showServerMenu(bot, chatId, userId, lastMesageid);
+			} catch (e) {
+				bot.answerCallbackQuery(query.id, { text: "Gagal hapus server" });
+			}
+		}
+
+		if (query.data.startsWith("delPrice_")) {
+			const priceId = query.data.replace("delPrice_", "");
+			try {
+				await Price.destroy({ where: { id: priceId } });
+				bot.answerCallbackQuery(query.id, { text: "Harga berhasil dihapus" });
+				showPriceMenu(bot, chatId, userId, lastMesageid);
+			} catch (e) {
+				bot.answerCallbackQuery(query.id, { text: "Gagal hapus harga" });
+			}
+		}
+
+		if (query.data.startsWith("editPrice_")) {
+			const priceId = query.data.replace("editPrice_", "");
+			bot.editMessageText("Masukan harga baru (angka saja):", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId]
+			});
+			setUserStep(userId, { step: "editPrice", data: { priceId } });
 		}
 		
 		if (query.data === "inviteFriend") {
@@ -148,158 +398,393 @@ ${remaining > 0
     }
 
 	}
-		if (query.data == "getSSHPrem") {
-			try {
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
-				const users = await user.findOne({ where: userId });
-				if (!users.premium) {
-					const sent = await bot.sendMessage(
-						chatId,
-						`Fitur ini hanya untuk pengguna *Premium*.
+		if (query.data == "back_main") {
+		const User = require("../model/User.js");
+		const users = await User.findByPk(userId);
+		const status = users && users.premium ? "Premium" : "Free";
+		await bot.deleteMessage(chatId, lastMesageid[userId]);
+		const sent = await bot.sendMessage(chatId,
+			`Welcome to GalangBot\n\n<b>Info User:</b>\n🆔 ID: <code>${userId}</code>\n📊 Status: ${status}\n\n<b>Please select the menu:</b>`,
+			{
+				parse_mode: "HTML",
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🔰 Buy VPN", callback_data: "buy_vpn" }],
+						[{ text: "👥 Undang Teman", callback_data: "inviteFriend" }]
+					]
+				}
+			}
+		);
+		setlastMesage_id(userId, sent.message_id);
+	}
 
-*Dengan Premium kamu bisa:*
-• unlimited create ssh/v2ray premium
-• server stabil
-• masa aktif ssh/v2ray 7 hari
+	if (query.data == "buy_vpn") {
+		try {
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
+			const servers = await Server.findAll();
+			let keyboard = [];
+			if (servers.length === 0) {
+				keyboard.push([{ text: "❌ Belum ada server tersedia", callback_data: "noop" }]);
+			} else {
+				for (const sv of servers) {
+					keyboard.push([{ text: "🖥 " + sv.name, callback_data: "sv_" + sv.id }]);
+				}
+			}
+			const sent = await bot.sendMessage(chatId, "📡 <b>Pilih Server:</b>", {
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+			setlastMesage_id(userId, sent.message_id);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server. Silahkan hubungi admin");
+		}
+	}
 
-*Ketik tombol di bawah untuk upgrade* ✨`,
-						{
-							parse_mode: "Markdown",
-							reply_markup: {
-								inline_keyboard: [
-									[
-										{
-											text: "Upgrade PREMIUM 30 DAY",
-											callback_data: "buyPrem30"
-										}
-									]
-								]
+	if (query.data.startsWith("sv_")) {
+		try {
+			const serverId = query.data.replace("sv_", "");
+			const server = await Server.findByPk(serverId);
+			if (!server) {
+				return bot.answerCallbackQuery(query.id, { text: "Server tidak ditemukan" });
+			}
+			let keyboard = [];
+			for (let i = 0; i < PROTOCOL_LIST.length; i += 2) {
+				const row = [{ text: PROTOCOL_LIST[i].label, callback_data: "proto_" + serverId + "_" + PROTOCOL_LIST[i].key }];
+				if (PROTOCOL_LIST[i + 1]) {
+					row.push({ text: PROTOCOL_LIST[i + 1].label, callback_data: "proto_" + serverId + "_" + PROTOCOL_LIST[i + 1].key });
+				}
+				keyboard.push(row);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn" }]);
+			await bot.editMessageText("🖥 <b>" + server.name + "</b>\n\nPilih protokol:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("proto_")) {
+		try {
+			const parts = query.data.replace("proto_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1).join("_");
+			const prices = await Price.findAll({ order: [["days", "ASC"]] });
+			let keyboard = [];
+			for (const p of prices) {
+				keyboard.push([{
+					text: p.label + " - " + formatRupiah(p.price),
+					callback_data: "dur_" + serverId + "_" + protocol + "_" + p.days + "_" + p.price
+				}]);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "sv_" + serverId }]);
+			await bot.editMessageText("⏱ Pilih durasi:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("dur_")) {
+		try {
+			const parts = query.data.replace("dur_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1, -2).join("_");
+			const days = parseInt(parts[parts.length - 2]);
+			const price = parseInt(parts[parts.length - 1]);
+
+			const server = await Server.findByPk(serverId);
+			if (!server) {
+				return bot.sendMessage(chatId, "Server tidak ditemukan");
+			}
+
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
+
+			if (TEST_MODE) {
+				const genUsername = protocol + randomStr(4);
+				const genPassword = protocol === "ssh" ? randomStr(8) : undefined;
+				const body = { username: genUsername, quota: 0, iplimit: 2, days };
+				if (genPassword) body.password = genPassword;
+				try {
+					const apiRes = await axios.post(
+						`http://${server.host}:${server.port}/api/${protocol}`,
+						body,
+						{ timeout: 20000 }
+					);
+					const raw = apiRes?.data?.text || apiRes?.data?.message || "Akun berhasil dibuat";
+					const message = raw.replace(/\\n/g, "\n");
+					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
+						parse_mode: "HTML",
+						disable_web_page_preview: true
+					});
+				} catch (apiErr) {
+					console.error("TEST_MODE_ERROR:", apiErr.message);
+					if (apiErr.response) console.error("RESPONSE_DATA:", JSON.stringify(apiErr.response.data, null, 2));
+					if (apiErr.response?.status) console.error("STATUS:", apiErr.response.status);
+					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
+				}
+				return;
+			}
+
+			const res = await axios.get("https://qris.adijayavpn.cloud/api/deposit", {
+				params: { amount: price, apikey: payApi }
+			});
+
+			const sent = await bot.sendPhoto(chatId, res.data.data.qris_url, {
+				caption: `🧾 <b>Invoice Pembayaran</b>
+
+🖥 Server: ${server.name}
+📡 Protokol: ${protocol.toUpperCase()}
+⏱ Durasi: ${days} Hari
+💰 Total: ${formatRupiah(res.data.data.total_amount)}
+
+Order ID: <code>${res.data.data.transaction_id}</code>
+
+Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
+				parse_mode: "HTML"
+			});
+
+			setUserStep(userId, {
+				step: "waiting_payment",
+				data: {
+					serverId,
+					protocol,
+					days,
+					transactionId: res.data.data.transaction_id,
+					serverName: server.name,
+					serverHost: server.host,
+					serverPort: server.port
+				}
+			});
+
+			const startTime = Date.now();
+			const timeout = 8 * 60 * 1000;
+			while (Date.now() - startTime < timeout) {
+				try {
+					const result = await axios.get("https://qris.adijayavpn.cloud/api/status/payment", {
+						params: {
+							transaction_id: res.data.data.transaction_id,
+							apikey: payApi
+						}
+					});
+					if (result.data.paid) {
+						await bot.deleteMessage(chatId, sent.message_id);
+						const stepData = getUserStep()[userId]?.data;
+						if (stepData) {
+							try {
+								const genUsername = stepData.protocol + randomStr(4);
+								const genPassword = stepData.protocol === "ssh" ? randomStr(8) : undefined;
+								const body = { username: genUsername, quota: 0, iplimit: 2, days: stepData.days };
+								if (genPassword) body.password = genPassword;
+
+								const apiRes = await axios.post(
+									`http://${stepData.serverHost}:${stepData.serverPort}/api/${stepData.protocol}`,
+									body,
+									{ timeout: 20000 }
+								);
+								const raw = apiRes?.data?.text || apiRes?.data?.data?.text || apiRes?.data?.message || "Akun berhasil dibuat";
+								const message = raw.replace(/\\n/g, "\n");
+								await bot.sendMessage(chatId, message, {
+									parse_mode: "HTML",
+									disable_web_page_preview: true
+								});
+							} catch (apiErr) {
+								await bot.sendMessage(chatId,
+									`✅ Pembayaran berhasil!\n🖥 Server: ${stepData.serverName}\n📡 Protokol: ${stepData.protocol.toUpperCase()}\n⏱ Durasi: ${stepData.days} Hari\n\nNamun gagal membuat akun. Silakan hubungi admin.`
+								);
 							}
 						}
-					);
-					setlastMesage_id(userId, sent.message_id);
-					return;
+						clearUserStep(userId);
+						return;
+					}
+					await new Promise(resolve => setTimeout(resolve, 3000));
+				} catch (err) {
+					console.error("Error polling:", err);
 				}
-				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
-				const res = await axios.post(
-					`${baseUrlApi}:${port}/api/ssh/create`
-				);
-				console.log(res);
-				const raw = res.data.data;
-
-				// ubah \\n menjadi newline beneran
-				const message = raw.replace(/\\n/g, "\n");
-
-				bot.sendMessage(chatId, message, {
-					parse_mode: "HTML",
-					disable_web_page_preview: true
-				});
-			} catch (err) {
-				console.log("gagal get ssh premium: " + err);
-				bot.sendMessage(
-					chatId,
-					"Terjadi kesalahan server.Silahkan hubunggi admin"
-				);
 			}
+			await bot.deleteMessage(chatId, sent.message_id);
+			bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
+			clearUserStep(userId);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server. Silakan hubungi admin");
 		}
-		if (query.data == "getV2RAYPrem") {
-			try {
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
-				console.log(user);
-				const users = await user.findOne({ where: userId });
-				if (!users.premium) {
-					const sent = await bot.sendMessage(
-						chatId,
-						`Fitur ini hanya untuk pengguna *Premium*.
+	}
 
-*Dengan Premium kamu bisa:*
-• unlimited create ssh/v2ray premium
-• server stabil
-• masa aktif ssh/v2ray 7 hari
 
-*Ketik tombol di bawah untuk upgrade* ✨`,
-						{
-							parse_mode: "Markdown",
-							reply_markup: {
-								inline_keyboard: [
-									[
-										{
-											text: "BUY PREMIUM 30 DAY",
-											callback_data: "buyPrem30"
-										}
-									]
-								]
-							}
-						}
-					);
-					setlastMesage_id(userId, sent.message_id);
-					return;
-				}
-				console.log(`${baseUrlApi}:${port}/api/ssh/create`);
-				const res = await axios.post(
-					`${baseUrlApi}:${port}/api/vmess/create`
-				);
-				console.log(res);
-				const raw = res.data.data;
+		if (query.data.startsWith("svTool_")) {
+		try {
+			const serverId = query.data.replace("svTool_", "");
+			await showToolCategories(bot, chatId, userId, lastMesageid, serverId);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
 
-				// ubah \\n menjadi newline beneran
-				const message = raw.replace(/\\n/g, "\n");
+	if (query.data.startsWith("toolCat_")) {
+		try {
+			const parts = query.data.replace("toolCat_", "").split("_");
+			const serverId = parts[0];
+			const category = parts.slice(1).join("_");
+			await showToolActions(bot, chatId, userId, lastMesageid, serverId, category);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
 
-				bot.sendMessage(chatId, message, {
-					parse_mode: "HTML",
-					disable_web_page_preview: true
-				});
-			} catch (err) {
-				console.log("gagal get ssh premium: " + err);
-				bot.sendMessage(
-					chatId,
-					"Terjadi kesalahan server.Silahkan hubunggi admin"
-				);
+	if (query.data.startsWith("toolXray_")) {
+		try {
+			const parts = query.data.replace("toolXray_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1).join("_");
+			await showToolXrayActions(bot, chatId, userId, lastMesageid, serverId, protocol);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("toolConfirm_")) {
+		try {
+			const parts = query.data.replace("toolConfirm_", "").split("_");
+			const serverId = parts[0];
+			const action = parts.slice(1).join("_");
+			const server = await Server.findByPk(serverId);
+			if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+
+			const apiPathMap = {
+				reboot: "/api/server/reboot",
+				restart: "/api/server/restart",
+				cleanExpired: "/api/system/expired",
+				clearCache: "/api/system/clear-cache",
+				backup: "/api/system/backup"
+			};
+			const path = apiPathMap[action];
+			if (!path) return bot.sendMessage(chatId, "Aksi tidak dikenal");
+
+			await bot.editMessageText("⏳ Memproses " + action + " di " + server.name + "...", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId]
+			});
+
+			const result = await callServerApi(serverId, "POST", path);
+			const msg = result?.message || JSON.stringify(result);
+			await bot.sendMessage(chatId, "✅ " + msg);
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "❌ Gagal: " + (e.response?.data?.error || e.message));
+		}
+	}
+
+	if (query.data.startsWith("toolInput_")) {
+		try {
+			const parts = query.data.replace("toolInput_", "").split("_");
+			const serverId = parts[0];
+			const action = parts.slice(1).join("_");
+
+			const actionLabels = {
+				lock: "🔒 Masukkan username yang akan di-LOCK:",
+				unlock: "🔓 Masukkan username yang akan di-UNLOCK:",
+				renew_ssh: "📅 Masukkan username SSH yang akan diperpanjang:",
+				delete_ssh: "❌ Masukkan username SSH yang akan dihapus:",
+				renew: "📅 Masukkan username yang akan diperpanjang:",
+				delete: "❌ Masukkan username yang akan dihapus:",
+				quota: "📦 Masukkan username untuk set quota:",
+				iplimit: "🔢 Masukkan username untuk set IP limit:",
+				domain: "🌐 Masukkan domain baru:",
+				autoReboot: "⏰ Masukkan jam auto-reboot (0-23):"
+			};
+
+			const label = actionLabels[action] || "✏️ Masukkan input:";
+			await bot.editMessageText(label, {
+				chat_id: chatId,
+				message_id: lastMesageid[userId]
+			});
+			setUserStep(userId, { step: "toolInput", data: { serverId, action } });
+		} catch (e) {
+			console.log(e);
+			bot.sendMessage(chatId, "Terjadi kesalahan");
+		}
+	}
+
+	if (query.data.startsWith("tool_")) {
+		try {
+			const parts = query.data.replace("tool_", "").split("_");
+			const serverId = parts[0];
+			const action = parts.slice(1).join("_");
+
+			const server = await Server.findByPk(serverId);
+			if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+
+			await bot.editMessageText("⏳ Memproses...", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId]
+			});
+
+			let method = "GET";
+			let path = "";
+			let data = null;
+
+			if (action === "serverInfo") path = "/api/server/info";
+			else if (action === "serverStatus") path = "/api/server/status";
+			else if (action === "speedtest") path = "/api/server/speedtest";
+			else if (action === "listSsh") path = "/api/ssh";
+			else if (action === "sshActive") path = "/api/ssh/active";
+			else if (action === "monitorIps") path = "/api/monitor/ips";
+			else if (action === "monitorQuota") path = "/api/monitor/quota";
+			else if (action.startsWith("listXray_")) {
+				const proto = action.replace("listXray_", "");
+				path = "/api/" + proto;
+			} else {
+				return bot.sendMessage(chatId, "Aksi tidak dikenal");
 			}
-		}
 
-		if (query.data == "buyPrem") {
-			try {
-				await bot.deleteMessage(chatId, lastMesageid[userId]);
-				const users = await user.findOne({ where: userId });
-				if (!users.premium) {
-					const sent = await bot.sendMessage(
-						chatId,
-						`Fitur ini hanya untuk pengguna *Premium*.
-
-*Dengan Premium kamu bisa:*
-• unlimited create ssh/v2ray premium
-• server stabil
-• masa aktif ssh/v2ray 7 hari
-
-*Ketik tombol di bawah untuk upgrade* ✨`,
-						{
-							parse_mode: "Markdown",
-							reply_markup: {
-								inline_keyboard: [
-									[
-										{
-											text: "Upgrade PREMIUM 30 DAY",
-											callback_data: "buyPrem30"
-										}
-									]
-								]
-							}
-						}
-					);
-					setlastMesage_id(userId, sent.message_id);
-					return;
-				}
-				const sent = await bot.sendMessage(
-					chatId,
-					"Anda sudah menjadi premium"
-				);
-				setlastMesage_id(userId, sent.message_id);
-			} catch (err) {
-				console.error("Error:", err);
-				bot.sendMessage(chatId, "Terjadi kesalahan server.");
+			const result = await callServerApi(serverId, method, path, data);
+			let output = "";
+			if (result?.text) {
+				output = result.text;
+			} else if (result?.users) {
+				const userList = result.users.map(u => "👤 " + u.username + " | Exp: " + (u.exp || "-") + " | Status: " + (u.status || "active")).join("\n");
+				output = "👥 Total: " + (result.total || result.users.length) + "\n\n" + userList;
+			} else if (result?.services) {
+				output = Object.entries(result.services).map(([k, v]) => "• " + k + ": " + v).join("\n");
+			} else if (result?.active) {
+				output = result.active.map(a => "👤 " + a.username + " | IP: " + a.ip + " | Via: " + (a.via || "-")).join("\n");
+			} else if (result?.result) {
+				output = result.result;
+			} else if (result?.message) {
+				output = result.message;
+			} else if (result?.ssh || result?.vmess) {
+				output = JSON.stringify(result, null, 2);
+			} else {
+				output = JSON.stringify(result, null, 2);
 			}
+
+			const maxLen = 3800;
+			if (output.length > maxLen) output = output.substring(0, maxLen) + "\n\n... (truncated)";
+
+			await bot.sendMessage(chatId, "<b>" + action + "</b>\n\n" + output, {
+				parse_mode: "HTML",
+				disable_web_page_preview: true
+			});
+		} catch (e) {
+			console.log(e);
+			const errMsg = e.response?.data?.error || e.message;
+			bot.sendMessage(chatId, "❌ Gagal: " + errMsg);
 		}
+	}
+
 		if (query.data == "buyPrem30") {
 			try {
 			    const users = await user.findOne({ where: userId });
@@ -396,172 +881,7 @@ Status kamu menjadi *Premium* 🎉
 			}
 		}
 
-		if (query.data == "getSSH") {
-  // hapus pesan lama
-  try {
-    if (lastMesageid[userId]) {
-      await bot.deleteMessage(chatId, lastMesageid[userId]);
-    }
-  } catch {}
-
-  const now = Date.now();
-  if (!apiLimit[userId]) {
-  apiLimit[userId] = {};
-  }
-  const last = apiLimit[userId].ssh || 0;
-  const canUseAPI = (now - last) >= API_COOLDOWN;
-  console.log(last)
-
-  // ======================
-  // 1️⃣ JIKA KENA LIMIT → STOP (API MASIH HIDUP)
-  // ======================
-  if (!canUseAPI) {
-    const sisa = API_COOLDOWN - (now - last);
-    const jam = Math.ceil(sisa / (1000 * 60 * 60));
-
-    await bot.sendMessage(
-      chatId,
-      `⏳ Anda telah mencapai limit hari ini.\nSilakan tunggu ± ${jam} jam`
-    );
-    return; // ⛔ STOP DI SINI
-  }
-
-  // ======================
-  // 2️⃣ COBA API
-  // ======================
-  try {
-    const res = await axios.post(
-      `${baseUrlFree}:${port}/api/ssh/create`,
-      {},
-      { timeout: 10000 }
-    );
-
-    const raw = res?.data?.data;
-    if (!raw) throw new Error("API kosong");
-
-    const message = raw.replace(/\\n/g, "\n");
-
-    await bot.sendMessage(chatId, message, {
-      parse_mode: "HTML",
-      disable_web_page_preview: true
-    });
-
-    // simpan limit HANYA jika API sukses
-    setJeda(userId, "ssh", now)
-
-    await bot.sendMessage(
-      process.env.OWNER,
-      `@${username} ${userId} get SSH (API)`
-    );
-
-    return; // ✅ API sukses → STOP
-  } catch (err) {
-    console.log("API mati / error, fallback ke lokal" + err);
-  }
-
-  // ======================
-  // 3️⃣ FALLBACK LOCAL (HANYA JIKA API MATI)
-  // ======================
-  try {
-    const Akun = await getAkunRandom("ssh");
-    if (!Akun || !Akun.detail) throw new Error("Akun kosong");
-
-    await bot.sendMessage(chatId, Akun.detail, {
-      parse_mode: "HTML"
-    });
-
-    await bot.sendMessage(
-      process.env.OWNER,
-      `@${username} ${userId} get SSH (LOCAL)`
-    );
-  } catch (err) {
-    await bot.sendMessage(chatId, "❌ Gagal mendapatkan akun SSH");
-    console.log(err);
-  }
-} else if (query.data == "getV2RAY") {
-  // hapus pesan lama
-  try {
-    if (lastMesageid[userId]) {
-      await bot.deleteMessage(chatId, lastMesageid[userId]);
-    }
-  } catch {}
-
-  const now = Date.now();
-  if (!apiLimit[userId]) {
-  apiLimit[userId] = {};
-  }
-
-  const last = apiLimit[userId].v2ray || 0;
-  const canUseAPI = (now - last) >= API_COOLDOWN;
-  console.log(last)
-
-  // ======================
-  // 1️⃣ JIKA KENA LIMIT → STOP (API MASIH HIDUP)
-  // ======================
-  if (!canUseAPI) {
-    const sisa = API_COOLDOWN - (now - last);
-    const jam = Math.ceil(sisa / (1000 * 60 * 60));
-
-    await bot.sendMessage(
-      chatId,
-      `⏳ Anda telah mencapai limit hari ini.\nSilakan tunggu ± ${jam} jam`
-    );
-    return; // ⛔ STOP DI SINI
-  }
-
-  // ======================
-  // 2️⃣ COBA API
-  // ======================
-  try {
-    const res = await axios.post(
-      `${baseUrlFree}:${port}/api/vmess/create`,
-      {},
-      { timeout: 10000 }
-    );
-
-    const raw = res?.data?.data;
-    if (!raw) throw new Error("API kosong");
-
-    const message = raw.replace(/\\n/g, "\n");
-
-    await bot.sendMessage(chatId, message, {
-      parse_mode: "HTML",
-      disable_web_page_preview: true
-    });
-
-    // simpan limit HANYA jika API sukses
-    setJeda(userId, "v2ray", now)
-
-    await bot.sendMessage(
-      process.env.OWNER,
-      `@${username} ${userId} get v2ray (API)`
-    );
-
-    return; // ✅ API sukses → STOP
-  } catch (err) {
-    console.log("API mati / error, fallback ke lokal" + err);
-  }
-
-  // ======================
-  // 3️⃣ FALLBACK LOCAL (HANYA JIKA API MATI)
-  // ======================
-  try {
-    const Akun = await getAkunRandom("ssh");
-    if (!Akun || !Akun.detail) throw new Error("Akun kosong");
-
-    await bot.sendMessage(chatId, Akun.detail, {
-      parse_mode: "HTML"
-    });
-
-    await bot.sendMessage(
-      process.env.OWNER,
-      `@${username} ${userId} get SSH (LOCAL)`
-    );
-  } catch (err) {
-    await bot.sendMessage(chatId, "❌ Gagal mendapatkan akun SSH");
-    console.log(err);
-  }
-} else if (query.data == "ssh") {
+		if (query.data == "ssh") {
 			const exp = await getDate(userstep[userId].data.exp);
 			try {
 				await createAcount(userstep[userId].data.data, "ssh", exp);

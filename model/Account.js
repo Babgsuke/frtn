@@ -15,6 +15,14 @@ const akun = db.define(
 		exp: {
 			type: DataTypes.DATEONLY,
 			allowNull: false
+		},
+		serverId: {
+			type: DataTypes.INTEGER,
+			allowNull: true
+		},
+		protocol: {
+			type: DataTypes.STRING,
+			allowNull: true
 		}
 	},
 	{
