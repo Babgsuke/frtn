@@ -57,6 +57,88 @@ async function callServerApi(serverId, method, path, data = null) {
 	return res.data;
 }
 
+async function proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, serverName, serverHost, serverPort, protocol, days, price, username, password }) {
+	if (TEST_MODE) {
+		const body = { username, quota: 0, iplimit: 2, days };
+		if (password) body.password = password;
+		try {
+			const apiRes = await axios.post(`http://${serverHost}:${serverPort}/api/${protocol}`, body, { timeout: 20000 });
+			const raw = apiRes?.data?.html || apiRes?.data?.message || apiRes?.data?.html || "Akun berhasil dibuat";
+			const message = raw.replace(/\\n/g, "\n");
+			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
+				parse_mode: "HTML",
+				disable_web_page_preview: true
+			});
+		} catch (apiErr) {
+			logError("buy_vpn_create", apiErr);
+			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
+		}
+		return;
+	}
+
+	const res = await axios.get("https://qris.adijayavpn.cloud/api/deposit", {
+		params: { amount: price, apikey: payApi }
+	});
+
+	const sent = await bot.sendPhoto(chatId, res.data.data.qris_url, {
+		caption: `🧾 <b>Invoice Pembayaran</b>
+
+🖥 Server: ${serverName}
+📡 Protokol: ${protocol.toUpperCase()}
+⏱ Durasi: ${days} Hari
+💰 Total: ${formatRupiah(res.data.data.total_amount)}
+
+Order ID: <code>${res.data.data.transaction_id}</code>
+
+Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
+		parse_mode: "HTML"
+	});
+
+	setUserStep(userId, {
+		step: "waiting_payment",
+		data: { serverId, serverName, serverHost, serverPort, protocol, days, username, password, transactionId: res.data.data.transaction_id }
+	});
+
+	const startTime = Date.now();
+	const timeout = 8 * 60 * 1000;
+	while (Date.now() - startTime < timeout) {
+		try {
+			const result = await axios.get("https://qris.adijayavpn.cloud/api/status/payment", {
+				params: { transaction_id: res.data.data.transaction_id, apikey: payApi }
+			});
+			if (result.data.paid) {
+				await bot.deleteMessage(chatId, sent.message_id);
+				const stepData = getUserStep()[userId]?.data;
+				if (stepData) {
+					try {
+						const body = { username: stepData.username, quota: 0, iplimit: 2, days: stepData.days };
+						if (stepData.password) body.password = stepData.password;
+						const apiRes = await axios.post(`http://${stepData.serverHost}:${stepData.serverPort}/api/${stepData.protocol}`, body, { timeout: 20000 });
+						const raw = apiRes?.data?.html || apiRes?.data?.message || apiRes?.data?.html || "Akun berhasil dibuat";
+						const message = raw.replace(/\\n/g, "\n");
+						await bot.sendMessage(chatId, message, {
+							parse_mode: "HTML",
+							disable_web_page_preview: true
+						});
+					} catch (apiErr) {
+						await bot.sendMessage(chatId,
+							`✅ Pembayaran berhasil!\n🖥 Server: ${stepData.serverName}\n📡 Protokol: ${stepData.protocol.toUpperCase()}\n⏱ Durasi: ${stepData.days} Hari\n\nNamun gagal membuat akun. Silakan hubungi admin.`
+						);
+					}
+				}
+				clearUserStep(userId);
+				return;
+			}
+			await new Promise(resolve => setTimeout(resolve, 3000));
+		} catch (err) {
+			logError("payment_polling", err);
+		}
+	}
+	await bot.deleteMessage(chatId, sent.message_id);
+	bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
+	clearUserStep(userId);
+}
+
 const TOOL_CATEGORIES = {
 	info: { label: "📊 Server Info", icon: "📊" },
 	ssh: { label: "👥 SSH Management", icon: "👥" },
@@ -510,109 +592,14 @@ ${remaining > 0
 
 			await bot.deleteMessage(chatId, lastMesageid[userId]);
 
-			if (TEST_MODE) {
-				const genUsername = protocol + randomStr(4);
-				const genPassword = protocol === "ssh" ? randomStr(8) : undefined;
-				const body = { username: genUsername, quota: 0, iplimit: 2, days };
-				if (genPassword) body.password = genPassword;
-				try {
-					const apiRes = await axios.post(
-						`http://${server.host}:${server.port}/api/${protocol}`,
-						body,
-						{ timeout: 20000 }
-					);
-					const raw = apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
-					const message = raw.replace(/\\n/g, "\n");
-					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
-						parse_mode: "HTML",
-						disable_web_page_preview: true
-					});
-				} catch (apiErr) {
-					logError("buy_vpn_create", apiErr);
-					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
-				}
-				return;
-			}
-
-			const res = await axios.get("https://qris.adijayavpn.cloud/api/deposit", {
-				params: { amount: price, apikey: payApi }
+			setUserStep(userId, {
+				step: "input_username",
+				data: { serverId, serverName: server.name, serverHost: server.host, serverPort: server.port, protocol, days, price }
 			});
 
-			const sent = await bot.sendPhoto(chatId, res.data.data.qris_url, {
-				caption: `🧾 <b>Invoice Pembayaran</b>
-
-🖥 Server: ${server.name}
-📡 Protokol: ${protocol.toUpperCase()}
-⏱ Durasi: ${days} Hari
-💰 Total: ${formatRupiah(res.data.data.total_amount)}
-
-Order ID: <code>${res.data.data.transaction_id}</code>
-
-Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
+			await bot.sendMessage(chatId, "✏️ <b>Masukkan username yang diinginkan:</b>\n\nMinimal 2 karakter, huruf/angka saja.", {
 				parse_mode: "HTML"
 			});
-
-			setUserStep(userId, {
-				step: "waiting_payment",
-				data: {
-					serverId,
-					protocol,
-					days,
-					transactionId: res.data.data.transaction_id,
-					serverName: server.name,
-					serverHost: server.host,
-					serverPort: server.port
-				}
-			});
-
-			const startTime = Date.now();
-			const timeout = 8 * 60 * 1000;
-			while (Date.now() - startTime < timeout) {
-				try {
-					const result = await axios.get("https://qris.adijayavpn.cloud/api/status/payment", {
-						params: {
-							transaction_id: res.data.data.transaction_id,
-							apikey: payApi
-						}
-					});
-					if (result.data.paid) {
-						await bot.deleteMessage(chatId, sent.message_id);
-						const stepData = getUserStep()[userId]?.data;
-						if (stepData) {
-							try {
-								const genUsername = stepData.protocol + randomStr(4);
-								const genPassword = stepData.protocol === "ssh" ? randomStr(8) : undefined;
-								const body = { username: genUsername, quota: 0, iplimit: 2, days: stepData.days };
-								if (genPassword) body.password = genPassword;
-
-								const apiRes = await axios.post(
-									`http://${stepData.serverHost}:${stepData.serverPort}/api/${stepData.protocol}`,
-									body,
-									{ timeout: 20000 }
-								);
-								const raw = apiRes?.data?.text || apiRes?.data?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
-								const message = raw.replace(/\\n/g, "\n");
-								await bot.sendMessage(chatId, message, {
-									parse_mode: "HTML",
-									disable_web_page_preview: true
-								});
-							} catch (apiErr) {
-								await bot.sendMessage(chatId,
-									`✅ Pembayaran berhasil!\n🖥 Server: ${stepData.serverName}\n📡 Protokol: ${stepData.protocol.toUpperCase()}\n⏱ Durasi: ${stepData.days} Hari\n\nNamun gagal membuat akun. Silakan hubungi admin.`
-								);
-							}
-						}
-						clearUserStep(userId);
-						return;
-					}
-					await new Promise(resolve => setTimeout(resolve, 3000));
-				} catch (err) {
-					logError("payment_polling", err);
-				}
-			}
-			await bot.deleteMessage(chatId, sent.message_id);
-			bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
-			clearUserStep(userId);
 		} catch (e) {
 			logError("dur_handler", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server. Silakan hubungi admin");
@@ -917,3 +904,5 @@ Status kamu menjadi *Premium* 🎉
 		}
 	});
 };
+
+module.exports.proceedToCreate = proceedToCreate;

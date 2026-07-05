@@ -10,6 +10,7 @@ const {
 	setlastMesage_id
 } = require("../module/Session.js");
 const { isNumber } = require("../module/validasi.js");
+const { proceedToCreate } = require("./queryHendler.js");
 
 module.exports = bot => {
 	bot.on("message", async msg => {
@@ -104,6 +105,35 @@ module.exports = bot => {
 			} catch (e) {
 				bot.sendMessage(chatId, "❌ Gagal update harga: " + e.message);
 			}
+		} else if (UserStep[userId].step == "input_username") {
+			const td = UserStep[userId].data;
+			const { serverId, serverName, serverHost, serverPort, protocol, days, price } = td;
+
+			if (!input || input.length < 2 || !/^[a-zA-Z0-9_]+$/.test(input)) {
+				bot.sendMessage(chatId, "Username tidak valid! Minimal 2 karakter, huruf/angka/underscore saja.");
+				return;
+			}
+
+			if (protocol === "ssh") {
+				setUserStep(userId, { step: "input_password", data: { ...td, username: input } });
+				bot.sendMessage(chatId, "🔑 Masukkan password untuk SSH:");
+			} else {
+				clearUserStep(userId);
+				const lastMesageid = getlastMesage_id();
+				await proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, serverName, serverHost, serverPort, protocol, days, price, username: input });
+			}
+		} else if (UserStep[userId].step == "input_password") {
+			const td = UserStep[userId].data;
+			const { serverId, serverName, serverHost, serverPort, protocol, days, price, username } = td;
+
+			if (!input || input.length < 2) {
+				bot.sendMessage(chatId, "Password tidak valid! Minimal 2 karakter.");
+				return;
+			}
+
+			clearUserStep(userId);
+			const lastMesageid = getlastMesage_id();
+			await proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, serverName, serverHost, serverPort, protocol, days, price, username, password: input });
 		} else if (UserStep[userId].step == "toolInput") {
 			const td = UserStep[userId].data;
 			const { serverId, action } = td;
