@@ -1,4 +1,5 @@
 const TEST_MODE = process.env.TEST_MODE === "true";
+const { logError } = require("../module/logger.js");
 
 const broadcash = require("../module/bc.js");
 const createAcount = require("../module/UploadAcount.js");
@@ -347,7 +348,7 @@ ${remaining > 0
     );
     setlastMesage_id(userId, sent.message_id);
 		  } catch (e) {
-		    console.log(e)
+		    logError("dashboard", e)
 		    bot.sendMessage(
 					chatId,
 					"Terjadi kesalahan server.Silahkan hubunggi admin"
@@ -394,7 +395,7 @@ ${remaining > 0
   setlastMesage_id(userId, sent.message_id);
   bot.answerCallbackQuery(chatId);
     } catch (e) {
-    console.log(e)
+    logError("ref_leaderboard", e)
     }
 
 	}
@@ -436,7 +437,7 @@ ${remaining > 0
 			});
 			setlastMesage_id(userId, sent.message_id);
 		} catch (e) {
-			console.log(e);
+			logError("buy_vpn_menu", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server. Silahkan hubungi admin");
 		}
 	}
@@ -464,7 +465,7 @@ ${remaining > 0
 				reply_markup: { inline_keyboard: keyboard }
 			});
 		} catch (e) {
-			console.log(e);
+			logError("sv_select", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
 		}
 	}
@@ -489,7 +490,7 @@ ${remaining > 0
 				reply_markup: { inline_keyboard: keyboard }
 			});
 		} catch (e) {
-			console.log(e);
+			logError("proto_select", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
 		}
 	}
@@ -520,16 +521,14 @@ ${remaining > 0
 						body,
 						{ timeout: 20000 }
 					);
-					const raw = apiRes?.data?.text || apiRes?.data?.message || "Akun berhasil dibuat";
+					const raw = apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 					const message = raw.replace(/\\n/g, "\n");
 					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
 						parse_mode: "HTML",
 						disable_web_page_preview: true
 					});
 				} catch (apiErr) {
-					console.error("TEST_MODE_ERROR:", apiErr.message);
-					if (apiErr.response) console.error("RESPONSE_DATA:", JSON.stringify(apiErr.response.data, null, 2));
-					if (apiErr.response?.status) console.error("STATUS:", apiErr.response.status);
+					logError("buy_vpn_create", apiErr);
 					await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
 				}
 				return;
@@ -591,7 +590,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 									body,
 									{ timeout: 20000 }
 								);
-								const raw = apiRes?.data?.text || apiRes?.data?.data?.text || apiRes?.data?.message || "Akun berhasil dibuat";
+								const raw = apiRes?.data?.text || apiRes?.data?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 								const message = raw.replace(/\\n/g, "\n");
 								await bot.sendMessage(chatId, message, {
 									parse_mode: "HTML",
@@ -608,14 +607,14 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 					}
 					await new Promise(resolve => setTimeout(resolve, 3000));
 				} catch (err) {
-					console.error("Error polling:", err);
+					logError("payment_polling", err);
 				}
 			}
 			await bot.deleteMessage(chatId, sent.message_id);
 			bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
 			clearUserStep(userId);
 		} catch (e) {
-			console.log(e);
+			logError("dur_handler", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server. Silakan hubungi admin");
 		}
 	}
@@ -626,7 +625,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 			const serverId = query.data.replace("svTool_", "");
 			await showToolCategories(bot, chatId, userId, lastMesageid, serverId);
 		} catch (e) {
-			console.log(e);
+			logError("sv_tool", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
 		}
 	}
@@ -638,7 +637,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 			const category = parts.slice(1).join("_");
 			await showToolActions(bot, chatId, userId, lastMesageid, serverId, category);
 		} catch (e) {
-			console.log(e);
+			logError("tool_cat", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
 		}
 	}
@@ -650,7 +649,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 			const protocol = parts.slice(1).join("_");
 			await showToolXrayActions(bot, chatId, userId, lastMesageid, serverId, protocol);
 		} catch (e) {
-			console.log(e);
+			logError("tool_xray", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
 		}
 	}
@@ -682,7 +681,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 			const msg = result?.message || JSON.stringify(result);
 			await bot.sendMessage(chatId, "✅ " + msg);
 		} catch (e) {
-			console.log(e);
+			logError("tool_confirm", e);
 			bot.sendMessage(chatId, "❌ Gagal: " + (e.response?.data?.error || e.message));
 		}
 	}
@@ -713,7 +712,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 			});
 			setUserStep(userId, { step: "toolInput", data: { serverId, action } });
 		} catch (e) {
-			console.log(e);
+			logError("tool_input", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan");
 		}
 	}
@@ -779,7 +778,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 				disable_web_page_preview: true
 			});
 		} catch (e) {
-			console.log(e);
+			logError("tool_action", e);
 			const errMsg = e.response?.data?.error || e.message;
 			bot.sendMessage(chatId, "❌ Gagal: " + errMsg);
 		}
@@ -857,7 +856,7 @@ Status kamu menjadi *Premium* 🎉
 						}
 						await new Promise(resolve => setTimeout(resolve, 3000));
 					} catch (err) {
-						console.error("Error:", err);
+						logError("premium_polling", err);
 					}
 				}
 				await bot.deleteMessage(userId, sent.message_id);
@@ -873,7 +872,7 @@ Status kamu menjadi *Premium* 🎉
 				);
 				setlastMesage_id(userId, sent.message_id);
 			} catch (err) {
-				console.error("Error:", err);
+				logError("premium_deposit", err);
 				bot.sendMessage(
 					chatId,
 					"Terjadi kesalahan server, Silakan hubunggi admin"
@@ -895,13 +894,11 @@ Status kamu menjadi *Premium* 🎉
 					chat_id: chatId,
 					message_id: messageId
 				});
-				console.error("Error:", err);
+				logError("old_ssh_create", err);
 				clearUserStep(userId);
 			}
 		} else if (query.data == "v2ray") {
 			const exp = await getDate(userstep[userId].data.exp);
-			console.log("exppppppppp ", exp);
-			console.log(userstep[userId].data.exp);
 			try {
 				await createAcount(userstep[userId].data.data, "v2ray", exp);
 				bot.editMessageText("Berhasil Menambahkan akun", {
@@ -910,7 +907,7 @@ Status kamu menjadi *Premium* 🎉
 				});
 				clearUserStep(userId);
 			} catch (err) {
-				console.error("Error:", err);
+				logError("old_v2ray_create", err);
 				bot.editMessageText("terjadi kesalahan server", {
 					chat_id: chatId,
 					message_id: messageId

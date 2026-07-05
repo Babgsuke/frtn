@@ -3,3 +3,4 @@ node_modules/
 db.sqlite
 storage.json
 coverage/
+log/
