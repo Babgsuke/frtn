@@ -495,7 +495,7 @@ ${remaining > 0
 		await bot.deleteMessage(chatId, lastMesageid[userId]);
 		let quote;
 		try {
-			quote = await axios.get("https://api.adijayavpn.cloud/api/quote");
+			quote = await axios.get("https://quotes.liupurnomo.com/api/quotes/random", { timeout: 5000 });
 		} catch (_) {
 			quote = { data: { data: { text: "" } } };
 		}
