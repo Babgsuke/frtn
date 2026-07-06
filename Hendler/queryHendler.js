@@ -318,7 +318,7 @@ module.exports = bot => {
 		const messageId = query.message.message_id;
 
 		const joined = await checkJoin(bot, userId);
-		const groupLink = process.env.GROUP_LINK || "https://t.me/galangStar";
+		const groupLink = process.env.GROUP_LINK;
 		if (!joined) {
 			if (lastMesageid[userId]) {
 				await bot.deleteMessage(chatId, lastMesageid[userId]).catch(() => {});
