@@ -1,155 +1,3 @@
-# API Documentation - VPN Server
-
-## Base URL
-```
-http://<host>:<port>/api
-```
-
-## Endpoints
-
-### 1. Create SSH Account
-**POST** `/api/ssh/create`
-
-Membuat akun SSH baru.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": "Username: xxx\nPassword: xxx\nExp: 2026-07-10\nServer: xxx.xxx.xxx.xxx\nPort: 22"
-}
-```
-
-### 2. Create VMess Account
-**POST** `/api/vmess/create`
-
-Membuat akun VMess/V2RAY baru.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": "vmess://xxxxxxxxxxxxx"
-}
-```
-
-### 3. Create VLess Account
-**POST** `/api/vless/create`
-
-Membuat akun VLess baru.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": "vless://xxxxxxxxxxxxx"
-}
-```
-
-### 4. Create Trojan Account
-**POST** `/api/trojan/create`
-
-Membuat akun Trojan baru.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": "trojan://xxxxxxxxxxxxx"
-}
-```
-
-### 5. Create Shadowsocks Account
-**POST** `/api/shadowsocks/create`
-
-Membuat akun Shadowsocks baru.
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": "ss://xxxxxxxxxxxxx"
-}
-```
-
----
-
-## Payment Gateway
-
-### Create Deposit / QRIS
-**GET** `https://qris.adijayavpn.cloud/api/deposit`
-
-Generate pembayaran QRIS.
-
-**Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `amount` | number | Jumlah pembayaran (Rp) |
-| `apikey` | string | API key payment |
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": {
-    "transaction_id": "INV-xxx",
-    "total_amount": 50000,
-    "qris_url": "https://..."
-  }
-}
-```
-
-### Check Payment Status
-**GET** `https://qris.adijayavpn.cloud/api/status/payment`
-
-Cek status pembayaran.
-
-**Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `transaction_id` | string | ID transaksi dari deposit |
-| `apikey` | string | API key payment |
-
-**Response:**
-```json
-{
-  "paid": true,
-  "data": { ... }
-}
-```
-
----
-
-## Panel Admin Bot (Telegram)
-
-### Menambahkan Server
-1. Buka panel admin: `/ownerp`
-2. Klik **Manage Server**
-3. Klik **Tambah Server**
-4. Input format: `nama_server, host, port`
-   - Contoh: `Server SGDO, 103.xx.xx.xx, 3000`
-
-### Menghapus Server
-1. Buka panel admin: `/ownerp`
-2. Klik **Manage Server**
-3. Klik **Hapus** pada server yang ingin dihapus
-
-### Mengatur Harga
-1. Buka panel admin: `/ownerp`
-2. Klik **Manage Prices**
-3. Lihat daftar harga, klik **Edit** untuk ubah nominal, atau **Hapus** untuk hapus
-4. Klik **Tambah Harga** untuk menambah durasi baru
-   - Format: `days, price, label`
-   - Contoh: `30, 50000, 30 Hari`
-
-### Protokol Otomatis Tersedia
-Semua protokol langsung tersedia tanpa perlu konfigurasi:
-- SSH
-- VMess
-- VLess
-- Trojan
-- Shadowsocks
-
 # SCT API Server — Dokumentasi
 
 ## Overview
@@ -157,7 +5,7 @@ Semua protokol langsung tersedia tanpa perlu konfigurasi:
 - **Stack:** Node.js Express, IP Whitelist auth, file-based storage
 - **Listen:** `127.0.0.1:5000` (localhost, proxied via Nginx)
 - **Auth:** IP Whitelist (`/etc/xray/api-whitelist.conf`) — otomatis membaca IP client
-- **Total:** 39 endpoint (1 public, 38 protected)
+- **Total:** 44 endpoint (1 public, 43 protected)
 - **Format response:** JSON
 
 ---
@@ -416,6 +264,38 @@ Protected. Buat user SSH baru.
 
 ---
 
+### POST /api/ssh/trial
+
+Protected. Buat trial SSH (auto-generate username & password, auto-delete via `at`).
+
+**Request (opsional — default 60 menit):**
+```json
+{ "minutes": 30 }
+```
+
+**Success (201):**
+```json
+{
+  "message": "Trial SSH created",
+  "data": { "username": "Trial-216Y", "exp": "2026-07-06" },
+  "text": "════════════════════\n       Format SSH OVPN Account\n════════════════════\nUsername         : Trial-216Y\nPassword         : 0ZGWpr\n...\nAktif Selama     : 60 Menit\nQuota            : 0 GB\nIP Limit         : 99\nBerakhir Pada    : 06 Jul, 2026\n════════════════════",
+  "html": "<b>...</b>",
+  "base64": "4pWQ4pWQ..."
+}
+```
+
+**Default trial:**
+| Field | Value |
+|---|---|
+| Username | `Trial-` + 4 random `[X-Z0-9]` |
+| Password | 6 random `[a-zA-Z0-9]` |
+| Durasi | 60 menit (bisa diubah via `minutes`) |
+| Quota | 0 GB (unlimited) |
+| IP Limit | 99 |
+| Auto-delete | `at` scheduler setelah `minutes` |
+
+---
+
 ### GET /api/ssh/:username
 
 Protected. Detail user SSH.
@@ -569,6 +449,49 @@ Protected. Buat user VMess baru.
 
 ---
 
+### POST /api/vmess/trial
+
+Protected. Buat trial VMess (auto-generate username, default quota & iplimit).
+
+**Request (opsional — default 60 menit):**
+```json
+{ "minutes": 30 }
+```
+
+**Success (201):**
+```json
+{
+  "message": "Trial VMess created",
+  "data": {
+    "username": "Triall421",
+    "uuid": "f8ed14a0-8f91-46c8-9b11-7a52e3270eac",
+    "exp": "2026-07-06",
+    "quota_gb": "1",
+    "iplimit": "10"
+  },
+  "text": "════════════════════\n      VMESS XRAY\n════════════════════\n...\nAktif Selama   : 30 Menit\nBerakhir Pada  : 06 Jul, 2026\n════════════════════",
+  "html": "<b>...</b>",
+  "base64": "4pWQ4pWQ..."
+}
+```
+
+**Default trial (semua Xray protocol):**
+| Field | Value |
+|---|---|
+| Username | auto-generate per prefix protokol (lihat tabel bawah) |
+| Durasi | 60 menit (bisa diubah via `minutes`) |
+| Quota | 1 GB (shadowsocks: 5 GB) |
+| IP Limit | 10 |
+
+| Protocol | Prefix | Contoh |
+|---|---|---|
+| VMess | `Triall` + 3 digit | `Triall421` |
+| VLESS | `Trial-VL` + 3 digit | `Trial-VL141` |
+| Trojan | `TrI4L` + 3 digit | `TrI4L578` |
+| Shadowsocks | `Tri4L` + 3 digit | `Tri4L238` |
+
+---
+
 ### DELETE /api/vmess/:username
 
 Protected. Hapus user VMess.
@@ -645,10 +568,13 @@ Semua endpoint identik dengan VMess, hanya berbeda path dan label:
 
 ### GET /api/vless
 ### POST /api/vless
+### POST /api/vless/trial
 ### DELETE /api/vless/:username
 ### PUT /api/vless/:username/renew
 ### PUT /api/vless/:username/quota
 ### PUT /api/vless/:username/iplimit
+
+Trial sama dengan VMess: request `{"minutes": 30}`, response `{ "message": "Trial VLESS created", ... }`
 
 Contoh response create:
 ```json
@@ -678,10 +604,13 @@ Contoh response create:
 
 ### GET /api/trojan
 ### POST /api/trojan
+### POST /api/trojan/trial
 ### DELETE /api/trojan/:username
 ### PUT /api/trojan/:username/renew
 ### PUT /api/trojan/:username/quota
 ### PUT /api/trojan/:username/iplimit
+
+Trial sama dengan VMess: request `{"minutes": 30}`, response `{ "message": "Trial Trojan created", ... }`
 
 Contoh response create:
 ```json
@@ -711,10 +640,14 @@ Contoh response create:
 
 ### GET /api/shadowsocks
 ### POST /api/shadowsocks
+### POST /api/shadowsocks/trial
 ### DELETE /api/shadowsocks/:username
 ### PUT /api/shadowsocks/:username/renew
 ### PUT /api/shadowsocks/:username/quota
 ### PUT /api/shadowsocks/:username/iplimit
+
+Trial sama dengan VMess: request `{"minutes": 30}`, response `{ "message": "Trial Shadowsocks created", ... }`
+Catatan: quota default Shadowsocks trial = **5 GB** (bukan 1 GB)
 
 Contoh response create:
 ```json

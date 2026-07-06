@@ -504,6 +504,26 @@ ${remaining > 0
 	if (query.data == "buy_vpn") {
 		try {
 			await bot.deleteMessage(chatId, lastMesageid[userId]);
+			const sent = await bot.sendMessage(chatId, "🔰 <b>Menu VPN</b>\n\nPilih opsi:", {
+				parse_mode: "HTML",
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "🆓 Trial (60 menit)", callback_data: "buy_vpn_trial" }],
+						[{ text: "💳 Buy", callback_data: "buy_vpn_buy" }],
+						[{ text: "⬅ Kembali", callback_data: "back_main" }]
+					]
+				}
+			});
+			setlastMesage_id(userId, sent.message_id);
+		} catch (e) {
+			logError("buy_vpn_menu", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server. Silahkan hubungi admin");
+		}
+	}
+
+	if (query.data == "buy_vpn_buy") {
+		try {
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
 			const servers = await Server.findAll();
 			let keyboard = [];
 			if (servers.length === 0) {
@@ -513,7 +533,32 @@ ${remaining > 0
 					keyboard.push([{ text: "🖥 " + sv.name, callback_data: "sv_" + sv.id }]);
 				}
 			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn" }]);
 			const sent = await bot.sendMessage(chatId, "📡 <b>Pilih Server:</b>", {
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+			setlastMesage_id(userId, sent.message_id);
+		} catch (e) {
+			logError("buy_vpn_menu", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server. Silahkan hubungi admin");
+		}
+	}
+
+	if (query.data == "buy_vpn_trial") {
+		try {
+			await bot.deleteMessage(chatId, lastMesageid[userId]);
+			const servers = await Server.findAll();
+			let keyboard = [];
+			if (servers.length === 0) {
+				keyboard.push([{ text: "❌ Belum ada server tersedia", callback_data: "noop" }]);
+			} else {
+				for (const sv of servers) {
+					keyboard.push([{ text: "🖥 " + sv.name, callback_data: "svTrial_" + sv.id }]);
+				}
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn" }]);
+			const sent = await bot.sendMessage(chatId, "🆓 <b>Trial — Pilih Server:</b>\n\nGratis 60 menit, tanpa ribet!", {
 				parse_mode: "HTML",
 				reply_markup: { inline_keyboard: keyboard }
 			});
@@ -539,7 +584,7 @@ ${remaining > 0
 				}
 				keyboard.push(row);
 			}
-			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn" }]);
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn_buy" }]);
 			await bot.editMessageText("🖥 <b>" + server.name + "</b>\n\nPilih protokol:", {
 				chat_id: chatId,
 				message_id: lastMesageid[userId],
@@ -574,6 +619,67 @@ ${remaining > 0
 		} catch (e) {
 			logError("proto_select", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("svTrial_")) {
+		try {
+			const serverId = query.data.replace("svTrial_", "");
+			const server = await Server.findByPk(serverId);
+			if (!server) {
+				return bot.answerCallbackQuery(query.id, { text: "Server tidak ditemukan" });
+			}
+			let keyboard = [];
+			for (let i = 0; i < PROTOCOL_LIST.length; i += 2) {
+				const row = [{ text: PROTOCOL_LIST[i].label, callback_data: "protoTrial_" + serverId + "_" + PROTOCOL_LIST[i].key }];
+				if (PROTOCOL_LIST[i + 1]) {
+					row.push({ text: PROTOCOL_LIST[i + 1].label, callback_data: "protoTrial_" + serverId + "_" + PROTOCOL_LIST[i + 1].key });
+				}
+				keyboard.push(row);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "buy_vpn_trial" }]);
+			await bot.editMessageText("🖥 <b>" + server.name + "</b>\n\nPilih protokol trial:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			logError("sv_trial", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("protoTrial_")) {
+		try {
+			const parts = query.data.replace("protoTrial_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1).join("_");
+			const server = await Server.findByPk(serverId);
+			if (!server) {
+				return bot.sendMessage(chatId, "Server tidak ditemukan");
+			}
+
+			await bot.editMessageText("⏳ Membuat trial " + protocol.toUpperCase() + "...", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId]
+			});
+
+			const apiRes = await axios.post(
+				`http://${server.host}:${server.port}/api/${protocol}/trial`,
+				{ minutes: 60 },
+				{ timeout: 20000 }
+			);
+
+			const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Trial berhasil dibuat";
+			const message = raw.replace(/\\n/g, "\n");
+			await bot.sendMessage(chatId, "🆓 <b>Trial " + protocol.toUpperCase() + "</b>\n\n" + message, {
+				parse_mode: "HTML",
+				disable_web_page_preview: true
+			});
+		} catch (e) {
+			logError("trial_create", e);
+			bot.sendMessage(chatId, "❌ Gagal membuat trial: " + (e.response?.data?.error || e.message));
 		}
 	}
 
