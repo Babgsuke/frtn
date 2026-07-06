@@ -10,6 +10,7 @@ const path = require("path");
 const dbPath = path.join(__dirname, "db.sqlite");const db = require("./config/db");
 require("./model/User"); // penting agar model terload
 require("./model/Server");
+require("./model/TrialLog");
 const Price = require("./model/Price");
 const checkPremium = require("./module/deletePrrmiumExp.js");
 

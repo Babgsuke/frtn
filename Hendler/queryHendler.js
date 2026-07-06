@@ -508,8 +508,8 @@ ${remaining > 0
 				parse_mode: "HTML",
 				reply_markup: {
 					inline_keyboard: [
-						[{ text: "🆓 Trial (60 menit)", callback_data: "buy_vpn_trial" }],
-						[{ text: "💳 Buy", callback_data: "buy_vpn_buy" }],
+						[{ text: "💳 Buat Akun", callback_data: "buy_vpn_buy" }],
+						[{ text: "🆓 Buat Trial", callback_data: "buy_vpn_trial" }],
 						[{ text: "⬅ Kembali", callback_data: "back_main" }]
 					]
 				}
@@ -660,6 +660,21 @@ ${remaining > 0
 				return bot.sendMessage(chatId, "Server tidak ditemukan");
 			}
 
+			const TrialLog = require("../model/TrialLog.js");
+			const { Op } = require("sequelize");
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const trialCount = await TrialLog.count({
+				where: {
+					userId: String(userId),
+					protocol,
+					createdAt: { [Op.gte]: today }
+				}
+			});
+			if (trialCount >= 3) {
+				return bot.sendMessage(chatId, "❌ Kamu sudah mencapai batas trial " + protocol.toUpperCase() + " hari ini (3/3). Coba besok lagi!");
+			}
+
 			await bot.editMessageText("⏳ Membuat trial " + protocol.toUpperCase() + "...", {
 				chat_id: chatId,
 				message_id: lastMesageid[userId]
@@ -670,6 +685,8 @@ ${remaining > 0
 				{ minutes: 60 },
 				{ timeout: 20000 }
 			);
+
+			await TrialLog.create({ userId: String(userId), protocol });
 
 			const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Trial berhasil dibuat";
 			const message = raw.replace(/\\n/g, "\n");
