@@ -490,15 +490,40 @@ ${remaining > 0
 		const User = require("../model/User.js");
 		const users = await User.findByPk(userId);
 		const status = users && users.premium ? "Premium" : "Free";
+		const name = query.from.first_name || "";
+		const username = query.from.username ? "@" + query.from.username : "-";
 		await bot.deleteMessage(chatId, lastMesageid[userId]);
+		let quote;
+		try {
+			quote = await axios.get("https://api.adijayavpn.cloud/api/quote");
+		} catch (_) {
+			quote = { data: { data: { text: "" } } };
+		}
 		const sent = await bot.sendMessage(chatId,
-			`Welcome to GalangBot\n\n<b>Info User:</b>\n🆔 ID: <code>${userId}</code>\n📊 Status: ${status}\n\n<b>Please select the menu:</b>`,
+			`Welcome to GalangBot\n
+🗒️ quote:
+<pre>${quote.data.data.text}</pre>
+
+<b>Info User:</b>
+🆔 ID: <code>${userId}</code>
+👤 Name: ${name}
+📊 Status: ${status}
+📛 Username: ${username}
+
+<b>Please select the menu:</b>`,
 			{
 				parse_mode: "HTML",
 				reply_markup: {
 					inline_keyboard: [
-						[{ text: "🔰 Buy VPN", callback_data: "buy_vpn" }],
-						[{ text: "👥 Undang Teman", callback_data: "inviteFriend" }]
+						[
+							{ text: "🔰 Buy VPN", callback_data: "buy_vpn" }
+						],
+						[
+							{ text: "📦 Akun Ku", callback_data: "my_accounts" }
+						],
+						[
+							{ text: "👥 Undang Teman", callback_data: "inviteFriend" }
+						]
 					]
 				}
 			}
@@ -549,7 +574,8 @@ ${remaining > 0
 			const detail = acc.detail.replace(/\\n/g, "\n");
 			await bot.sendMessage(chatId, header + "\n" + detail + "\n\n📅 Exp: " + (acc.exp || "-"), {
 				parse_mode: "HTML",
-				disable_web_page_preview: true
+				disable_web_page_preview: true,
+				reply_markup: { inline_keyboard: [[{ text: "⬅ Kembali", callback_data: "my_accounts" }]] }
 			});
 		} catch (e) {
 			logError("acc_detail", e);
