@@ -504,13 +504,13 @@ ${remaining > 0
 	if (query.data == "buy_vpn") {
 		try {
 			await bot.deleteMessage(chatId, lastMesageid[userId]);
-			const sent = await bot.sendMessage(chatId, "🔰 <b>Menu VPN</b>\n\nPilih opsi:", {
+			const sent = await bot.sendMessage(chatId, "🔰 <b>Menu VPN</b>\n\nSilahkan Pilih Opsi Di Bawah:", {
 				parse_mode: "HTML",
 				reply_markup: {
 					inline_keyboard: [
-						[{ text: "💳 Buat Akun", callback_data: "buy_vpn_buy" }],
-						[{ text: "🆓 Buat Trial", callback_data: "buy_vpn_trial" }],
-						[{ text: "⬅ Kembali", callback_data: "back_main" }]
+						[{ text: "💳 Buat Akun ( Premium", callback_data: "buy_vpn_buy" }],
+						[{ text: "🆓 Buat Trial ( Gratis )", callback_data: "buy_vpn_trial" }],
+						[{ text: " Kembali Ke Menu", callback_data: "back_main" }]
 					]
 				}
 			});
