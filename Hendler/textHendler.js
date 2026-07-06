@@ -12,21 +12,7 @@ const {
 } = require("../module/Session.js");
 const akun = require("../model/Account.js");
 const User = require("../model/User.js");
-const CHANNEL_ID = -1003157492398;
-async function checkJoin(bot, userId) {
-	try {
-		const res = await bot.getChatMember(CHANNEL_ID, userId);
-		const status = res.status;
-		console.log(status);
-		return (
-			status === "member" ||
-			status === "administrator" ||
-			status === "creator"
-		);
-	} catch (e) {
-		return false;
-	}
-}
+const checkJoin = require("../module/checkJoin.js");
 
 async function addPremiumDays(user, days = 30) {
   const now = new Date();

@@ -308,6 +308,7 @@ async function showPriceMenu(bot, chatId, userId, lastMesageid) {
 }
 
 module.exports = bot => {
+	const checkJoin = require("../module/checkJoin.js");
 	bot.on("callback_query", async query => {
 		const lastMesageid = getlastMesage_id();
 		const userstep = getUserStep();
@@ -315,6 +316,14 @@ module.exports = bot => {
 		const chatId = query.message.chat.id;
 		const userId = query.from.id;
 		const messageId = query.message.message_id;
+
+		const joined = await checkJoin(bot, userId);
+		if (!joined) {
+			return bot.answerCallbackQuery(query.id, {
+				text: "⚠️ Kamu harus join group dulu!",
+				show_alert: true
+			});
+		}
 
 		if (query.data.startsWith("owner_")) {
 			clearUserStep(userId);
