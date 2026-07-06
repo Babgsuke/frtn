@@ -162,6 +162,9 @@ module.exports = bot => {
             { text: "🔰 Buy VPN", callback_data: "buy_vpn" }
           ],
           [
+            { text: "📦 Akun Ku", callback_data: "my_accounts" }
+          ],
+          [
             { text: "👥 Undang Teman", callback_data: "inviteFriend" }
           ]
         ]

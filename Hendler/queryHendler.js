@@ -7,6 +7,7 @@ const getDate = require("../module/Date.js");
 const user = require("../model/User.js");
 const Server = require("../model/Server.js");
 const Price = require("../model/Price.js");
+const Account = require("../model/Account.js");
 const axios = require("axios");
 const payApi = process.env.payApi;
 const {
@@ -63,12 +64,14 @@ async function proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, se
 		if (password) body.password = password;
 		try {
 			const apiRes = await axios.post(`http://${serverHost}:${serverPort}/api/${protocol}`, body, { timeout: 20000 });
-			const raw = apiRes?.data?.html || apiRes?.data?.message || apiRes?.data?.html || "Akun berhasil dibuat";
+			const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 			const message = raw.replace(/\\n/g, "\n");
 			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
 				parse_mode: "HTML",
 				disable_web_page_preview: true
 			});
+			const exp = apiRes?.data?.data?.exp || null;
+			try { await Account.create({ userId: String(userId), detail: raw, type: protocol, exp, serverId, protocol }); } catch (_) {}
 		} catch (apiErr) {
 			logError("buy_vpn_create", apiErr);
 			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
@@ -114,12 +117,14 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 						const body = { username: stepData.username, quota: 0, iplimit: 2, days: stepData.days };
 						if (stepData.password) body.password = stepData.password;
 						const apiRes = await axios.post(`http://${stepData.serverHost}:${stepData.serverPort}/api/${stepData.protocol}`, body, { timeout: 20000 });
-						const raw = apiRes?.data?.html || apiRes?.data?.message || apiRes?.data?.html || "Akun berhasil dibuat";
+						const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 						const message = raw.replace(/\\n/g, "\n");
 						await bot.sendMessage(chatId, message, {
 							parse_mode: "HTML",
 							disable_web_page_preview: true
 						});
+						const exp = apiRes?.data?.data?.exp || null;
+						try { await Account.create({ userId: String(userId), detail: raw, type: stepData.protocol, exp, serverId: stepData.serverId, protocol: stepData.protocol }); } catch (_) {}
 					} catch (apiErr) {
 						await bot.sendMessage(chatId,
 							`✅ Pembayaran berhasil!\n🖥 Server: ${stepData.serverName}\n📡 Protokol: ${stepData.protocol.toUpperCase()}\n⏱ Durasi: ${stepData.days} Hari\n\nNamun gagal membuat akun. Silakan hubungi admin.`
@@ -499,6 +504,57 @@ ${remaining > 0
 			}
 		);
 		setlastMesage_id(userId, sent.message_id);
+	}
+
+	if (query.data == "my_accounts") {
+		try {
+			const accounts = await Account.findAll({ where: { userId: String(userId) }, order: [["createdAt", "DESC"]] });
+			if (accounts.length === 0) {
+				await bot.editMessageText("📦 <b>Akun Ku</b>\n\nBelum ada akun.", {
+					chat_id: chatId,
+					message_id: lastMesageid[userId],
+					parse_mode: "HTML",
+					reply_markup: { inline_keyboard: [[{ text: "⬅ Kembali", callback_data: "back_main" }]] }
+				});
+				return;
+			}
+			let keyboard = [];
+			for (const acc of accounts) {
+				const sv = await Server.findByPk(acc.serverId);
+				const svName = sv?.name || "?";
+				const label = svName + " - " + (acc.protocol || acc.type).toUpperCase();
+				keyboard.push([{ text: "📦 " + label, callback_data: "accDetail_" + acc.id }]);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "back_main" }]);
+			await bot.editMessageText("📦 <b>Akun Ku</b>\n\nPilih akun untuk melihat detail:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			logError("my_accounts", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan");
+		}
+	}
+
+	if (query.data.startsWith("accDetail_")) {
+		try {
+			const id = query.data.replace("accDetail_", "");
+			const acc = await Account.findByPk(id);
+			if (!acc) return bot.sendMessage(chatId, "Akun tidak ditemukan");
+			const sv = await Server.findByPk(acc.serverId);
+			const svName = sv?.name || "?";
+			const header = "📦 <b>" + svName + " - " + (acc.protocol || acc.type).toUpperCase() + "</b>\n";
+			const detail = acc.detail.replace(/\\n/g, "\n");
+			await bot.sendMessage(chatId, header + "\n" + detail + "\n\n📅 Exp: " + (acc.exp || "-"), {
+				parse_mode: "HTML",
+				disable_web_page_preview: true
+			});
+		} catch (e) {
+			logError("acc_detail", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan");
+		}
 	}
 
 	if (query.data == "buy_vpn") {

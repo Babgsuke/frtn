@@ -4,6 +4,15 @@ const { DataTypes } = require("sequelize");
 const akun = db.define(
 	"acount",
 	{
+		id: {
+			type: DataTypes.INTEGER,
+			autoIncrement: true,
+			primaryKey: true
+		},
+		userId: {
+			type: DataTypes.STRING,
+			allowNull: true
+		},
 		detail: {
 			type: DataTypes.TEXT,
 			allowNull: false
@@ -24,9 +33,6 @@ const akun = db.define(
 			type: DataTypes.STRING,
 			allowNull: true
 		}
-	},
-	{
-		id: false
 	}
 );
 
