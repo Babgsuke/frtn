@@ -318,11 +318,73 @@ module.exports = bot => {
 		const messageId = query.message.message_id;
 
 		const joined = await checkJoin(bot, userId);
+		const groupLink = process.env.GROUP_LINK || "https://t.me/galangStar";
 		if (!joined) {
-			return bot.answerCallbackQuery(query.id, {
-				text: "⚠️ Kamu harus join group dulu!",
-				show_alert: true
-			});
+			if (lastMesageid[userId]) {
+				await bot.deleteMessage(chatId, lastMesageid[userId]).catch(() => {});
+			}
+			const sent = await bot.sendMessage(chatId,
+				"⚠️ <b>Kamu harus join group dulu untuk menggunakan bot ini!</b>",
+				{
+					parse_mode: "HTML",
+					reply_markup: {
+						inline_keyboard: [
+							[{ text: "🔗 Join Group", url: groupLink }],
+							[{ text: "✅ Saya sudah join", callback_data: "recheck_join" }]
+						]
+					}
+				}
+			);
+			setlastMesage_id(userId, sent.message_id);
+			return;
+		}
+
+		if (query.data == "recheck_join") {
+			const recheckJoined = await checkJoin(bot, userId);
+			if (recheckJoined) {
+				await bot.deleteMessage(chatId, lastMesageid[userId]).catch(() => {});
+				const User = require("../model/User.js");
+				const users = await User.findByPk(userId);
+				const status = users && users.premium ? "Premium" : "Free";
+				const name = query.from.first_name || "";
+				const uname = query.from.username ? "@" + query.from.username : "-";
+				let quote;
+				try {
+					quote = await axios.get("https://quotes.liupurnomo.com/api/quotes/random", { timeout: 5000 });
+				} catch (_) {
+					quote = { data: { data: { text: "" } } };
+				}
+				const sent = await bot.sendMessage(chatId,
+					`Welcome to GalangBot\n
+🗒️ quote:
+<pre>${quote.data.data.text}</pre>
+
+<b>Info User:</b>
+🆔 ID: <code>${userId}</code>
+👤 Name: ${name}
+📊 Status: ${status}
+📛 Username: ${uname}
+
+<b>Please select the menu:</b>`,
+					{
+						parse_mode: "HTML",
+						reply_markup: {
+							inline_keyboard: [
+								[{ text: "🔰 Buy VPN", callback_data: "buy_vpn" }],
+								[{ text: "📦 Akun Ku", callback_data: "my_accounts" }],
+								[{ text: "👥 Undang Teman", callback_data: "inviteFriend" }]
+							]
+						}
+					}
+				);
+				setlastMesage_id(userId, sent.message_id);
+			} else {
+				bot.answerCallbackQuery(query.id, {
+					text: "❌ Kamu masih belum join group!",
+					show_alert: true
+				});
+			}
+			return;
 		}
 
 		if (query.data.startsWith("owner_")) {
