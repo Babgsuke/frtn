@@ -146,7 +146,6 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 	await bot.deleteMessage(chatId, sent.message_id);
 	bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
 	clearUserStep(userId);
-	sendNotif(bot, { userId, serverName, protocol, days, price, status: "⏳ Kadaluarsa" });
 }
 
 const TOOL_CATEGORIES = {
