@@ -8,6 +8,7 @@ const user = require("../model/User.js");
 const Server = require("../model/Server.js");
 const Price = require("../model/Price.js");
 const Account = require("../model/Account.js");
+const sendNotif = require("../module/sendNotif.js");
 const axios = require("axios");
 const payApi = process.env.payApi;
 const {
@@ -72,6 +73,7 @@ async function proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, se
 			});
 			const exp = apiRes?.data?.data?.exp || null;
 			try { await Account.create({ userId: String(userId), detail: raw, type: protocol, exp, serverId, protocol }); } catch (_) {}
+			sendNotif(bot, { userId, serverName, protocol, days, price, status: "🧪 Test Mode" });
 		} catch (apiErr) {
 			logError("buy_vpn_create", apiErr);
 			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n❌ Gagal membuat akun: " + (apiErr.response?.data?.error || apiErr.message));
@@ -125,10 +127,12 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 						});
 						const exp = apiRes?.data?.data?.exp || null;
 						try { await Account.create({ userId: String(userId), detail: raw, type: stepData.protocol, exp, serverId: stepData.serverId, protocol: stepData.protocol }); } catch (_) {}
+						sendNotif(bot, { userId, serverName: stepData.serverName, protocol: stepData.protocol, days: stepData.days, price, status: "✅ Berhasil" });
 					} catch (apiErr) {
 						await bot.sendMessage(chatId,
 							`✅ Pembayaran berhasil!\n🖥 Server: ${stepData.serverName}\n📡 Protokol: ${stepData.protocol.toUpperCase()}\n⏱ Durasi: ${stepData.days} Hari\n\nNamun gagal membuat akun. Silakan hubungi admin.`
 						);
+						sendNotif(bot, { userId, serverName: stepData.serverName, protocol: stepData.protocol, days: stepData.days, price, status: "⚠️ Akun Gagal Dibuat" });
 					}
 				}
 				clearUserStep(userId);
@@ -142,6 +146,7 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 	await bot.deleteMessage(chatId, sent.message_id);
 	bot.sendMessage(chatId, "⏳ Timeout: Pembayaran tidak diterima dalam 8 menit");
 	clearUserStep(userId);
+	sendNotif(bot, { userId, serverName, protocol, days, price, status: "⏳ Kadaluarsa" });
 }
 
 const TOOL_CATEGORIES = {
