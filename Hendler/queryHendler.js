@@ -648,12 +648,16 @@ ${remaining > 0
 				keyboard.push([{ text: "📦 " + label, callback_data: "accDetail_" + acc.id }]);
 			}
 			keyboard.push([{ text: "⬅ Kembali", callback_data: "back_main" }]);
-			await bot.editMessageText("📦 <b>Akun Ku</b>\n\nPilih akun untuk melihat detail:", {
-				chat_id: chatId,
-				message_id: lastMesageid[userId],
-				parse_mode: "HTML",
-				reply_markup: { inline_keyboard: keyboard }
-			});
+			try {
+				await bot.editMessageText("📦 <b>Akun Ku</b>\n\nPilih akun untuk melihat detail:", {
+					chat_id: chatId,
+					message_id: lastMesageid[userId],
+					parse_mode: "HTML",
+					reply_markup: { inline_keyboard: keyboard }
+				});
+			} catch (editErr) {
+				if (!editErr.message.includes("message is not modified")) throw editErr;
+			}
 		} catch (e) {
 			logError("my_accounts", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan");
@@ -669,11 +673,13 @@ ${remaining > 0
 			const svName = sv?.name || "?";
 			const header = "📦 <b>" + svName + " - " + (acc.protocol || acc.type).toUpperCase() + "</b>\n";
 			const detail = acc.detail.replace(/\\n/g, "\n");
-			await bot.sendMessage(chatId, header + "\n" + detail + "\n\n📅 Exp: " + (acc.exp || "-"), {
+			bot.deleteMessage(chatId, messageId).catch(() => {});
+			const sent = await bot.sendMessage(chatId, header + "\n" + detail + "\n\n📅 Exp: " + (acc.exp || "-"), {
 				parse_mode: "HTML",
 				disable_web_page_preview: true,
 				reply_markup: { inline_keyboard: [[{ text: "⬅ Kembali", callback_data: "my_accounts" }]] }
 			});
+			setlastMesage_id(userId, sent.message_id);
 		} catch (e) {
 			logError("acc_detail", e);
 			bot.sendMessage(chatId, "Terjadi kesalahan");
