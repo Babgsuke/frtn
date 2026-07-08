@@ -65,7 +65,7 @@ async function proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, se
 		if (password) body.password = password;
 		try {
 			const apiRes = await axios.post(`http://${serverHost}:${serverPort}/api/${protocol}`, body, { timeout: 20000 });
-			const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
+			const raw = apiRes?.data?.html || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 			const message = raw.replace(/\\n/g, "\n");
 			await bot.sendMessage(chatId, "🧪 <b>TEST MODE</b>\n\n" + message, {
 				parse_mode: "HTML",
@@ -693,7 +693,7 @@ ${remaining > 0
 				parse_mode: "HTML",
 				reply_markup: {
 					inline_keyboard: [
-						[{ text: "💳 Buat Akun ( Premium", callback_data: "buy_vpn_buy" }],
+						[{ text: "💳 Buat Akun ( Premium }", callback_data: "buy_vpn_buy" }],
 						[{ text: "🆓 Buat Trial ( Gratis )", callback_data: "buy_vpn_trial" }],
 						[{ text: " Kembali Ke Menu", callback_data: "back_main" }]
 					]
