@@ -24,7 +24,19 @@ async function sendNotif(bot, { userId, serverName, protocol, days, price, statu
 ━━━━━━━━━━━━━━━━━━━━
 ${message || ""}`;
 	try {
-		await bot.sendMessage(GROUP_NOTIF_ID, text, { parse_mode: "HTML" });
+		await bot.sendMessage(GROUP_NOTIF_ID, text, {
+  parse_mode: "HTML",
+  reply_markup: {
+    inline_keyboard: [
+      [
+        {
+          text: "🛒 Beli Lagi",
+          url: "https://t.me/GalangStartbot"
+        }
+      ]
+    ]
+  }
+});
 	} catch (e) {
 		console.error("Gagal kirim notif:", e.message);
 	}
