@@ -102,17 +102,18 @@ module.exports = bot => {
       await bot.deleteMessage(chatId, lastMesage_id[userId]);
     }
   } catch {}
-  if (!joined) {
+	if (!joined) {
+    const groupLink = process.env.GROUP_LINK || "https://t.me/galangStar";
     return bot.sendMessage(
       userId,
-      `⚠️ Kamu harus join channel dulu untuk menggunakan bot ini.\n\nSetelah join, kirim ulang /start`,
+      `⚠️ Kamu harus join group dulu untuk menggunakan bot ini.\n\nSetelah join, kirim ulang /start`,
       {
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: "Join Channel",
-                url: "https://t.me/galangStar"
+                text: "🔗 Join Group",
+                url: groupLink
               }
             ]
           ]
@@ -204,6 +205,12 @@ module.exports = bot => {
 						{
 							text: "🛠 Server Tools",
 							callback_data: "owner_serverTools"
+						}
+					],
+					[
+						{
+							text: "📢 Fake Notif",
+							callback_data: "owner_fakeNotif"
 						}
 					]
 				]

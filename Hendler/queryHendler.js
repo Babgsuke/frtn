@@ -72,7 +72,7 @@ async function proceedToCreate(bot, chatId, userId, lastMesageid, { serverId, se
 				disable_web_page_preview: true
 			});
 			const exp = apiRes?.data?.data?.exp || null;
-			try { await Account.create({ userId: String(userId), detail: raw, type: protocol, exp, serverId, protocol }); } catch (_) {}
+			try { await Account.create({ userId: String(userId), username, detail: raw, type: protocol, exp, serverId, protocol }); } catch (_) {}
 			sendNotif(bot, { userId, serverName, protocol, days, price, status: "🧪 Test Mode" });
 		} catch (apiErr) {
 			logError("buy_vpn_create", apiErr);
@@ -119,14 +119,14 @@ Silakan scan QRIS untuk menyelesaikan pembayaran. Expired dalam 8 menit.`,
 						const body = { username: stepData.username, quota: 0, iplimit: 2, days: stepData.days };
 						if (stepData.password) body.password = stepData.password;
 						const apiRes = await axios.post(`http://${stepData.serverHost}:${stepData.serverPort}/api/${stepData.protocol}`, body, { timeout: 20000 });
-						const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
+						const raw = apiRes?.data?.html || apiRes?.data?.html || apiRes?.data?.message || "Akun berhasil dibuat";
 						const message = raw.replace(/\\n/g, "\n");
 						await bot.sendMessage(chatId, message, {
 							parse_mode: "HTML",
 							disable_web_page_preview: true
 						});
 						const exp = apiRes?.data?.data?.exp || null;
-						try { await Account.create({ userId: String(userId), detail: raw, type: stepData.protocol, exp, serverId: stepData.serverId, protocol: stepData.protocol }); } catch (_) {}
+						try { await Account.create({ userId: String(userId), username: stepData.username, detail: raw, type: stepData.protocol, exp, serverId: stepData.serverId, protocol: stepData.protocol }); } catch (_) {}
 						sendNotif(bot, { userId, serverName: stepData.serverName, protocol: stepData.protocol, days: stepData.days, price, status: "✅ Berhasil" });
 					} catch (apiErr) {
 						await bot.sendMessage(chatId,
@@ -289,6 +289,25 @@ async function showServerMenu(bot, chatId, userId, lastMesageid) {
 	});
 }
 
+async function fakeNotifShowServer(bot, chatId, userId, lastMesageid) {
+	const servers = await Server.findAll();
+	let keyboard = [];
+	if (servers.length === 0) {
+		keyboard.push([{ text: "Belum ada server", callback_data: "noop" }]);
+	} else {
+		for (const sv of servers) {
+			keyboard.push([{ text: "🖥 " + sv.name, callback_data: "fakeNotifSv_" + sv.id }]);
+		}
+	}
+	keyboard.push([{ text: "⬅ Kembali", callback_data: "owner_panel" }]);
+	await bot.editMessageText("📢 <b>Fake Notif</b>\n\nPilih server:", {
+		chat_id: chatId,
+		message_id: lastMesageid[userId],
+		parse_mode: "HTML",
+		reply_markup: { inline_keyboard: keyboard }
+	});
+}
+
 async function showPriceMenu(bot, chatId, userId, lastMesageid) {
 	const prices = await Price.findAll({ order: [["days", "ASC"]] });
 	let keyboard = [];
@@ -428,6 +447,9 @@ module.exports = bot => {
 					break;
 				case "serverTools":
 					showToolServerMenu(bot, chatId, userId, lastMesageid);
+					break;
+				case "fakeNotif":
+					fakeNotifShowServer(bot, chatId, userId, lastMesageid);
 					break;
 				default:
 			}
@@ -622,7 +644,7 @@ ${remaining > 0
 			for (const acc of accounts) {
 				const sv = await Server.findByPk(acc.serverId);
 				const svName = sv?.name || "?";
-				const label = svName + " - " + (acc.protocol || acc.type).toUpperCase();
+				const label = svName + " - " + (acc.username || "?") + " - " + (acc.protocol || acc.type).toUpperCase();
 				keyboard.push([{ text: "📦 " + label, callback_data: "accDetail_" + acc.id }]);
 			}
 			keyboard.push([{ text: "⬅ Kembali", callback_data: "back_main" }]);
@@ -1048,6 +1070,99 @@ ${remaining > 0
 			logError("tool_action", e);
 			const errMsg = e.response?.data?.error || e.message;
 			bot.sendMessage(chatId, "❌ Gagal: " + errMsg);
+		}
+	}
+
+	if (query.data.startsWith("fakeNotifSv_")) {
+		try {
+			const serverId = query.data.replace("fakeNotifSv_", "");
+			const server = await Server.findByPk(serverId);
+			if (!server) {
+				return bot.answerCallbackQuery(query.id, { text: "Server tidak ditemukan" });
+			}
+			let keyboard = [];
+			for (let i = 0; i < PROTOCOL_LIST.length; i += 2) {
+				const row = [{ text: PROTOCOL_LIST[i].label, callback_data: "fakeNotifProto_" + serverId + "_" + PROTOCOL_LIST[i].key }];
+				if (PROTOCOL_LIST[i + 1]) {
+					row.push({ text: PROTOCOL_LIST[i + 1].label, callback_data: "fakeNotifProto_" + serverId + "_" + PROTOCOL_LIST[i + 1].key });
+				}
+				keyboard.push(row);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "owner_fakeNotif" }]);
+			await bot.editMessageText("🖥 <b>" + server.name + "</b>\n\nPilih protokol untuk fake notif:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				parse_mode: "HTML",
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			logError("fakeNotifSv", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("fakeNotifProto_")) {
+		try {
+			const parts = query.data.replace("fakeNotifProto_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1).join("_");
+			const prices = await Price.findAll({ order: [["days", "ASC"]] });
+			let keyboard = [];
+			for (const p of prices) {
+				keyboard.push([{
+					text: p.label + " - " + formatRupiahRp(p.price),
+					callback_data: "fakeNotifDur_" + serverId + "_" + protocol + "_" + p.days + "_" + p.price
+				}]);
+			}
+			keyboard.push([{ text: "⬅ Kembali", callback_data: "fakeNotifSv_" + serverId }]);
+			await bot.editMessageText("⏱ Pilih durasi untuk fake notif:", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				reply_markup: { inline_keyboard: keyboard }
+			});
+		} catch (e) {
+			logError("fakeNotifProto", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan server");
+		}
+	}
+
+	if (query.data.startsWith("fakeNotifDur_")) {
+		try {
+			const parts = query.data.replace("fakeNotifDur_", "").split("_");
+			const serverId = parts[0];
+			const protocol = parts.slice(1, -2).join("_");
+			const days = parts[parts.length - 2];
+			const price = parseInt(parts[parts.length - 1]);
+			const server = await Server.findByPk(serverId);
+			if (!server) return bot.sendMessage(chatId, "Server tidak ditemukan");
+
+			const firstDigit = (Math.floor(Math.random() * 3) + 6).toString();
+			const rest = Array.from({ length: 9 }, () => Math.floor(Math.random() * 10)).join("");
+			const fakeUserId = firstDigit + rest;
+
+			await sendNotif(bot, {
+				userId: fakeUserId,
+				serverName: server.name,
+				protocol: protocol,
+				days: parseInt(days),
+				price: price,
+				status: "✅ Berhasil",
+				message: "💳 Pembayaran diterima\n🎯 Akun berhasil dibuat"
+			});
+
+			await bot.editMessageText("✅ Fake notif berhasil dikirim ke grup!", {
+				chat_id: chatId,
+				message_id: lastMesageid[userId],
+				reply_markup: {
+					inline_keyboard: [
+						[{ text: "📢 Kirim Lagi", callback_data: "owner_fakeNotif" }],
+						[{ text: "⬅ Owner Panel", callback_data: "owner_panel" }]
+					]
+				}
+			});
+		} catch (e) {
+			logError("fakeNotifDur", e);
+			bot.sendMessage(chatId, "Terjadi kesalahan: " + e.message);
 		}
 	}
 

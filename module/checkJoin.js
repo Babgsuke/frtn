@@ -1,4 +1,5 @@
 const GROUP_ID = process.env.GROUP_ID;
+const { logError } = require("./logger.js");
 
 async function checkJoin(bot, userId) {
 	if (!GROUP_ID) return true;
@@ -11,6 +12,7 @@ async function checkJoin(bot, userId) {
 			status === "creator"
 		);
 	} catch (e) {
+		logError("checkJoin", e);
 		return false;
 	}
 }
