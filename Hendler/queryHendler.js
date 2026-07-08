@@ -873,6 +873,7 @@ ${remaining > 0
 				parse_mode: "HTML",
 				disable_web_page_preview: true
 			});
+			sendNotif(bot, { userId, serverName: server.name, protocol, days: 0, price: 0, status: "🆓 Trial", message: "⏱ Durasi: 60 Menit" });
 		} catch (e) {
 			logError("trial_create", e);
 			bot.sendMessage(chatId, "❌ Gagal membuat trial: " + (e.response?.data?.error || e.message));
