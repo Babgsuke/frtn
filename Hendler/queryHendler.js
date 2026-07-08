@@ -873,7 +873,7 @@ ${remaining > 0
 
 			await TrialLog.create({ userId: String(userId), protocol });
 
-			const raw = apiRes?.data?.text || apiRes?.data?.html || apiRes?.data?.message || "Trial berhasil dibuat";
+			const raw = apiRes?.data?.html || apiRes?.data?.html || apiRes?.data?.message || "Trial berhasil dibuat";
 			const message = raw.replace(/\\n/g, "\n");
 			await bot.sendMessage(chatId, "🆓 <b>Trial " + protocol.toUpperCase() + "</b>\n\n" + message, {
 				parse_mode: "HTML",
